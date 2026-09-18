@@ -23,13 +23,14 @@
         <div class="home-layout">
           <div class="profile-column">
             <article class="team-info-card" aria-label="선택한 팀 정보">
+              <div class="team-logo-watermark" aria-hidden="true"><img id="teamLogoWatermarkImage" alt="" hidden /><span id="teamLogoWatermark">B</span></div>
               <div class="card-label"><span>팀 정보</span><span class="season-chip">2026</span></div>
               <div class="team-info-main"><span class="profile-team-crest" id="profileTeamInitial">B</span><div><p>현재 소속 팀</p><h2 id="profileTeam">배트조짐</h2><span id="profileRole">선수 · 기록원</span></div></div>
               <div class="team-info-foot"><span id="profileLeague">서울 일요리그</span><b id="profileTeamStanding">A조 3위</b></div>
             </article>
             <article class="player-card" aria-label="내 프로필">
               <div class="player-card-top"><span>내 프로필</span></div>
-              <div class="player-identity"><div class="profile-photo" aria-hidden="true"><svg viewBox="0 0 80 96"><circle cx="40" cy="30" r="17"/><path d="M13 90c2-24 10-37 27-37s25 13 27 37"/><path d="M20 65c12 8 28 8 40 0"/></svg><span>PROFILE</span></div><div><p>PLAYER</p><div class="profile-name-line"><h2 id="profileDisplayName">이도윤</h2><strong id="profileNumber">N.23</strong></div><div class="position-row"><span id="profilePosition">CF</span><span id="profileBats">우투우타</span></div></div></div>
+              <div class="player-identity"><div class="profile-photo" aria-hidden="true"><img class="profile-photo-image" alt="" /><svg viewBox="0 0 80 96"><circle cx="40" cy="30" r="17"/><path d="M13 90c2-24 10-37 27-37s25 13 27 37"/><path d="M20 65c12 8 28 8 40 0"/></svg><span>PROFILE</span></div><div><p>PLAYER</p><div class="profile-name-line"><h2 id="profileDisplayName">이도윤</h2><strong id="profileNumber">N.23</strong></div><div class="position-row"><span id="profilePosition">CF</span><span id="profileBats">우투우타</span></div></div></div>
               <dl class="profile-details"><div><dt>소속</dt><dd id="profileTeamShort">배트조짐</dd></div><div><dt>가입일</dt><dd>2024.03</dd></div><div><dt>출전</dt><dd id="profileGames">18경기</dd></div></dl>
               <button class="profile-card-hit" id="openProfileEditor" type="button" aria-label="내 프로필 수정하기"></button>
             </article>
@@ -44,7 +45,7 @@
       <section class="app-screen profile-editor-screen" id="screen-profile" data-screen="profile" aria-labelledby="profileEditorTitle" hidden>
         <div class="profile-editor-head"><button class="back-button-light" id="profileBackButton" type="button">‹ MY BOX</button><div><p class="date-line">내 프로필</p><h1 id="profileEditorTitle">프로필 수정</h1></div></div>
         <div class="profile-editor-layout">
-          <section class="photo-editor-card"><div class="profile-photo large"><svg viewBox="0 0 80 96"><circle cx="40" cy="30" r="17"/><path d="M13 90c2-24 10-37 27-37s25 13 27 37"/><path d="M20 65c12 8 28 8 40 0"/></svg><span>PROFILE</span></div><h2>이도윤</h2><p id="editorTeamCaption">배트조짐 · N.23</p><button class="outline-action" type="button" id="changePhotoButton">사진 변경</button></section>
+          <section class="photo-editor-card"><div class="profile-photo large"><img class="profile-photo-image" alt="" /><svg viewBox="0 0 80 96"><circle cx="40" cy="30" r="17"/><path d="M13 90c2-24 10-37 27-37s25 13 27 37"/><path d="M20 65c12 8 28 8 40 0"/></svg><span>PROFILE</span></div><h2>이도윤</h2><p id="editorTeamCaption">배트조짐 · N.23</p><input id="profilePhotoInput" type="file" accept="image/jpeg,image/png,image/webp" hidden /><button class="outline-action" type="button" id="changePhotoButton">사진 변경</button><small class="photo-help">JPG · PNG · WEBP / 아치형으로 자동 맞춤</small></section>
           <form class="profile-form" id="profileForm">
             <div class="section-head"><div><p>선수 정보</p><h2>기본 프로필</h2></div><span class="role-badge edit">본인만 수정</span></div>
             <div class="form-grid"><label>이름<input id="profileNameInput" value="이도윤" /></label><label>팀<select id="profileTeamSelect"><option value="bbat">배트조짐</option><option value="braves">브레이브스</option><option value="solo">개인 기록</option></select></label><label>등번호<input id="profileNumberInput" inputmode="numeric" value="23" maxlength="3" /></label><label>주 포지션<select id="profilePositionInput"><option>CF</option><option>P</option><option>SS</option><option>2B</option><option>C</option><option>OF</option></select></label><label>투구<select id="throwHandInput"><option>우투</option><option>좌투</option></select></label><label>타격<select id="batHandInput"><option>우타</option><option>좌타</option><option>양타</option></select></label></div>
