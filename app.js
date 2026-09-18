@@ -1,18 +1,21 @@
 const teams = {
   bbat: {
     name: "배트조짐", header: "배트조짐 · 중견수", role: "선수 · 기록원", position: "CF", bats: "우투우타", games: "18경기",
+    initial: "B", league: "서울 일요리그", standing: "A조 3위",
     title: "배트조짐에서의 시즌", trend: "최근 5경기 ▲ .042", summary: "18경기 · 61타석",
     stats: [["타율", ".348"], ["타점", "21"], ["OPS", ".927"]],
     teamMeta: "2021년 창단 · 선수 24명 · 서울 일요리그", wins: "12승 1무 5패", rank: "A조 3위"
   },
   braves: {
     name: "브레이브스", header: "브레이브스 · 투수", role: "선수", position: "P", bats: "우투우타", games: "10경기",
+    initial: "BR", league: "한강 토요리그", standing: "B조 1위",
     title: "브레이브스에서의 시즌", trend: "최근 3경기 ERA 1.42", summary: "10경기 · 42⅓이닝",
     stats: [["방어율", "2.34"], ["삼진", "47"], ["WHIP", "1.08"]],
     teamMeta: "2019년 창단 · 선수 21명 · 한강 토요리그", wins: "8승 2패", rank: "B조 1위"
   },
   solo: {
     name: "개인 기록", header: "개인 기록 · 외야수", role: "개인 기록", position: "OF", bats: "우투우타", games: "6경기",
+    initial: "ME", league: "연습 경기와 친선전", standing: "직접 기록",
     title: "나의 개인 경기", trend: "최근 경기 2안타", summary: "6경기 · 19타석",
     stats: [["타율", ".375"], ["타점", "7"], ["OPS", "1.022"]]
   }
@@ -48,7 +51,10 @@ function renderHomeTeam(key) {
   const team = teams[key];
   document.querySelector("#headerTeam").textContent = team.header;
   document.querySelector("#profileTeam").textContent = team.name;
+  document.querySelector("#profileTeamInitial").textContent = team.initial;
   document.querySelector("#profileRole").textContent = team.role;
+  document.querySelector("#profileLeague").textContent = team.league;
+  document.querySelector("#profileTeamStanding").textContent = team.standing;
   document.querySelector("#profilePosition").textContent = team.position;
   document.querySelector("#profileBats").textContent = team.bats;
   document.querySelector("#profileGames").textContent = team.games;
