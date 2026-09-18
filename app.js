@@ -574,10 +574,17 @@ function lineupPlayerOptions(participants, selectedNumber) {
   return [`<option value="">미정</option>`, ...participants.map(player => `<option value="${player.number}" ${player.number === selectedNumber ? "selected" : ""}>${player.number} ${player.name} · ${possiblePositions(player).join("/")}</option>`)].join("");
 }
 
+function renderRelieverRows(participants, selectedNumbers = []) {
+  const count = Math.min(4, Math.max(2, selectedNumbers.length || 2));
+  document.querySelector("#lineupRelieverList").innerHTML = Array.from({ length: count }, (_, index) => `<div class="reliever-row"><b>R${index + 1}</b><label>선수<select class="reliever-player-select">${lineupPlayerOptions(participants, selectedNumbers[index] || "")}</select></label><button class="remove-reliever" type="button" aria-label="구원투수 ${index + 1}칸 삭제" ${count <= 2 ? "disabled" : ""}>×</button></div>`).join("");
+  document.querySelector("#addRelieverButton").disabled = count >= 4;
+}
+
 function renderLineupBench(teamKey) {
   const participants = currentLineupContext.participants;
   const selected = new Set([
     document.querySelector("#lineupPitcherSelect").value,
+    ...[...document.querySelectorAll(".reliever-player-select")].map(select => select.value),
     ...[...document.querySelectorAll(".lineup-player-select")].map(select => select.value),
   ].filter(Boolean));
   const bench = participants.filter(player => !selected.has(player.number));
@@ -593,6 +600,7 @@ function renderLineupRows(teamKey, leagueId, game) {
   document.querySelector("#lineupParticipants").innerHTML = participants.map(player => `<span><b>${player.number}</b>${player.name}<small>${possiblePositions(player).join("/")}</small></span>`).join("");
   const defaultPitcher = participants.find(player => player.pitcher)?.number || "";
   document.querySelector("#lineupPitcherSelect").innerHTML = lineupPlayerOptions(participants, saved.pitcher || defaultPitcher);
+  renderRelieverRows(participants, saved.relievers || []);
   document.querySelector("#lineupOrder").innerHTML = Array.from({ length: 9 }, (_, index) => {
     const selectedNumber = stored ? saved.batting[index]?.player || "" : (index < 3 ? participants[index]?.number : "") || "";
     const selectedPosition = saved.batting[index]?.position || lineupPositions[index + 1] || "DH";
@@ -708,16 +716,32 @@ document.querySelector("#openLineupBuilder").addEventListener("click", openLineu
 document.querySelector("#closeLineupModal").addEventListener("click", closeLineupBuilder);
 document.querySelector("#cancelLineup").addEventListener("click", closeLineupBuilder);
 lineupBackdrop.addEventListener("click", closeLineupBuilder);
+document.querySelector("#addRelieverButton").addEventListener("click", () => {
+  const selected = [...document.querySelectorAll(".reliever-player-select")].map(select => select.value);
+  if (selected.length >= 4) return;
+  renderRelieverRows(currentLineupContext.participants, [...selected, ""]);
+  renderLineupBench(currentLineupContext.teamKey);
+});
+document.querySelector("#lineupRelieverList").addEventListener("click", event => {
+  const button = event.target.closest(".remove-reliever");
+  if (!button || button.disabled) return;
+  const rows = [...document.querySelectorAll(".reliever-row")];
+  const selected = rows.filter(row => row !== button.closest(".reliever-row")).map(row => row.querySelector("select").value);
+  renderRelieverRows(currentLineupContext.participants, selected);
+  renderLineupBench(currentLineupContext.teamKey);
+});
 document.querySelector("#lineupForm").addEventListener("change", event => {
-  if (event.target.matches(".lineup-player-select, #lineupPitcherSelect")) renderLineupBench(currentLineupContext.teamKey);
+  if (event.target.matches(".lineup-player-select, .reliever-player-select, #lineupPitcherSelect")) renderLineupBench(currentLineupContext.teamKey);
 });
 document.querySelector("#lineupForm").addEventListener("submit", event => {
   event.preventDefault();
   const rows = [...document.querySelectorAll(".lineup-row")];
   const batting = rows.map((row, index) => ({ order: index + 1, player: row.querySelector(".lineup-player-select").value, position: row.querySelector(".lineup-position-select").value }));
-  const selected = new Set([document.querySelector("#lineupPitcherSelect").value, ...batting.map(item => item.player)].filter(Boolean));
+  const relievers = [...document.querySelectorAll(".reliever-player-select")].map(select => select.value).filter(Boolean);
+  const selected = new Set([document.querySelector("#lineupPitcherSelect").value, ...relievers, ...batting.map(item => item.player)].filter(Boolean));
   lineupState[gameKey(currentLineupContext.teamKey, currentLineupContext.leagueId, currentLineupContext.game)] = {
     pitcher: document.querySelector("#lineupPitcherSelect").value,
+    relievers,
     batting,
     bench: currentLineupContext.participants.filter(player => !selected.has(player.number)).map(player => player.number),
   };
