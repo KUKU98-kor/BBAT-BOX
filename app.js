@@ -268,9 +268,8 @@ function renderRosterPreview(teamKey) {
   const roster = rosters[teamKey];
   document.querySelector("#rosterPreviewTitle").textContent = `${team.name} 선수명단`;
   document.querySelector("#teamStaffPreview").innerHTML = roster.staff.slice(0, 4).map(person => `<span class="staff-chip"><b>${person.role}</b>${person.name}</span>`).join("");
-  const hitters = roster.players.filter(player => !player.pitcher).sort((a, b) => b.avg - a.avg).slice(0, 5);
-  const pitchers = roster.players.filter(player => player.pitcher).slice(0, 2);
-  document.querySelector("#teamRosterPreview").innerHTML = [...hitters, ...pitchers].map(player => `<div class="preview-player ${player.pitcher ? "pitcher" : ""}"><span>${player.number}</span><div><strong>${player.name}</strong><small>${player.position} · ${player.pitcher ? "대표 투수" : "타율 상위"}</small></div><em>${player.stat}</em></div>`).join("");
+  const visiblePlayers = roster.players.slice(0, 9);
+  document.querySelector("#teamRosterPreview").innerHTML = visiblePlayers.map(player => `<div class="preview-player ${player.pitcher ? "pitcher" : ""}"><span>${player.number}</span><div><strong>${player.name}</strong><small>${player.position} · ${player.role.split(" · ")[0]}</small></div><em>${player.stat}</em></div>`).join("");
 }
 
 function gameKey(teamKey, leagueId, game = getNextWeekGame(teamKey, leagueId) || getLeague(teamKey, leagueId).nextGame) {
@@ -338,7 +337,7 @@ function renderTeamPage(key, requestedLeagueId) {
   document.querySelector("#teamSeasonLabel").textContent = league.season;
   document.querySelector("#teamWins").textContent = league.record;
   document.querySelector("#teamRank").textContent = league.rank;
-  document.querySelector("#nextGameLeague").textContent = `${league.name} · 7일 안의 다음 경기`;
+  document.querySelector("#nextGameLeague").textContent = `${league.name} · 다음 경기`;
   document.querySelector("#nextGameDate").textContent = game ? formatGameDate(game.date) : "다가오는 7일 내 경기 없음";
   document.querySelector("#nextGameHomeCrest").textContent = team.initial;
   document.querySelector("#nextGameTeam").textContent = team.name;
@@ -595,7 +594,7 @@ function renderLineupRows(teamKey, leagueId, game) {
   const defaultPitcher = participants.find(player => player.pitcher)?.number || "";
   document.querySelector("#lineupPitcherSelect").innerHTML = lineupPlayerOptions(participants, saved.pitcher || defaultPitcher);
   document.querySelector("#lineupOrder").innerHTML = Array.from({ length: 9 }, (_, index) => {
-    const selectedNumber = saved.batting[index]?.player || participants[index]?.number || "";
+    const selectedNumber = stored ? saved.batting[index]?.player || "" : (index < 3 ? participants[index]?.number : "") || "";
     const selectedPosition = saved.batting[index]?.position || lineupPositions[index + 1] || "DH";
     return `<div class="lineup-row"><b>${index + 1}</b><label>선수<select class="lineup-player-select">${lineupPlayerOptions(participants, selectedNumber)}</select></label><label>수비 위치<select class="lineup-position-select">${lineupPositionOptions(selectedPosition)}</select></label></div>`;
   }).join("");
