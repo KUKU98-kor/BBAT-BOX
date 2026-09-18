@@ -75,6 +75,7 @@ try {
   if (savedSchedules) Object.entries(savedSchedules).forEach(([teamKey, leagues]) => leagues.forEach(savedLeague => {
     const league = teamLeagues[teamKey]?.find(item => item.id === savedLeague.id);
     if (league && savedLeague.nextGame) league.nextGame = savedLeague.nextGame;
+    if (league && Array.isArray(savedLeague.games)) league.games = savedLeague.games;
   }));
 } catch (_) { /* 손상된 일정 임시 저장값은 무시합니다. */ }
 
@@ -221,6 +222,40 @@ function getLeague(teamKey, leagueId) {
   return teamLeagues[teamKey].find(league => league.id === leagueId) || teamLeagues[teamKey][0];
 }
 
+function offsetGame(game, days, opponent, venue) {
+  const date = new Date(`${game.date}T00:00:00`);
+  date.setDate(date.getDate() + days);
+  const localDate = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  return { date: localDate, time: game.time, opponent, venue };
+}
+
+function getLeagueGames(teamKey, leagueId) {
+  const league = getLeague(teamKey, leagueId);
+  if (!Array.isArray(league.games)) {
+    league.games = [
+      { ...league.nextGame },
+      offsetGame(league.nextGame, 14, "블루웨이브", "신월야구공원"),
+      offsetGame(league.nextGame, 28, "서울파이터스", "난지야구장 2구장"),
+    ];
+  }
+  return league.games.sort((a, b) => a.date.localeCompare(b.date));
+}
+
+function daysUntilGame(game) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const gameDate = new Date(`${game.date}T00:00:00`);
+  return Math.ceil((gameDate - today) / 86400000);
+}
+
+function getUpcomingGames(teamKey, leagueId) {
+  return getLeagueGames(teamKey, leagueId).filter(game => daysUntilGame(game) >= 0);
+}
+
+function getNextWeekGame(teamKey, leagueId) {
+  return getUpcomingGames(teamKey, leagueId).find(game => daysUntilGame(game) <= 7) || null;
+}
+
 function populateLeagueSelect(select, teamKey, selectedId) {
   const leagues = teamLeagues[teamKey];
   select.innerHTML = leagues.map(league => `<option value="${league.id}">${league.name}</option>`).join("");
@@ -238,31 +273,42 @@ function renderRosterPreview(teamKey) {
   document.querySelector("#teamRosterPreview").innerHTML = [...hitters, ...pitchers].map(player => `<div class="preview-player ${player.pitcher ? "pitcher" : ""}"><span>${player.number}</span><div><strong>${player.name}</strong><small>${player.position} · ${player.pitcher ? "대표 투수" : "타율 상위"}</small></div><em>${player.stat}</em></div>`).join("");
 }
 
-function gameKey(teamKey, leagueId) {
-  const league = getLeague(teamKey, leagueId);
-  return `${teamKey}:${leagueId}:${league.nextGame.date}`;
+function gameKey(teamKey, leagueId, game = getNextWeekGame(teamKey, leagueId) || getLeague(teamKey, leagueId).nextGame) {
+  return `${teamKey}:${leagueId}:${game.date}`;
 }
 
-function ensureAttendance(teamKey, leagueId) {
-  const key = gameKey(teamKey, leagueId);
+function ensureAttendance(teamKey, leagueId, game) {
+  const key = gameKey(teamKey, leagueId, game);
   if (!attendanceState[key]) {
     attendanceState[key] = Object.fromEntries(rosters[teamKey].players.map((player, index) => [player.name, index < 6 ? "yes" : index === 6 ? "maybe" : "no"]));
   }
   return attendanceState[key];
 }
 
-function renderAttendance(teamKey, leagueId) {
-  const attendance = ensureAttendance(teamKey, leagueId);
-  const attending = Object.entries(attendance).filter(([, status]) => status === "yes").map(([name]) => name);
-  const myStatus = attendance["이도윤"] || "maybe";
-  document.querySelector("#attendanceCount").textContent = `참가 ${attending.length}명`;
-  document.querySelectorAll("[data-attendance]").forEach(button => button.classList.toggle("active", button.dataset.attendance === myStatus));
-  document.querySelector("#attendancePreview").innerHTML = attending.slice(0, 5).map(name => `<span title="${name}">${name.slice(0, 1)}</span>`).join("") + (attending.length > 5 ? `<b>+${attending.length - 5}</b>` : "");
+function renderSchedulePolls(teamKey, leagueId) {
+  const games = getUpcomingGames(teamKey, leagueId).slice(0, 3);
+  document.querySelector("#schedulePollList").innerHTML = games.length ? games.map(game => {
+    const attendance = ensureAttendance(teamKey, leagueId, game);
+    const attending = Object.values(attendance).filter(status => status === "yes").length;
+    const myStatus = attendance["이도윤"] || "maybe";
+    const days = daysUntilGame(game);
+    const closed = days <= 7;
+    const timing = closed ? "투표 마감" : `${days - 7}일 후 마감`;
+    return `<article class="schedule-poll ${closed ? "closed" : ""}"><div class="poll-game"><span>${formatGameDate(game.date)} · ${game.time}</span><strong>vs ${game.opponent}</strong><small>${game.venue}</small></div><div class="poll-state"><b>${timing}</b><span>참가 ${attending}명</span></div><div class="attendance-buttons"><button type="button" data-attendance="yes" data-game-date="${game.date}" class="${myStatus === "yes" ? "active" : ""}" ${closed ? "disabled" : ""}>참가</button><button type="button" data-attendance="maybe" data-game-date="${game.date}" class="${myStatus === "maybe" ? "active" : ""}" ${closed ? "disabled" : ""}>미정</button><button type="button" data-attendance="no" data-game-date="${game.date}" class="${myStatus === "no" ? "active" : ""}" ${closed ? "disabled" : ""}>불참</button></div></article>`;
+  }).join("") : `<p class="poll-empty">등록된 향후 경기가 없습니다. 관리자가 일정을 추가하면 참가 투표가 열립니다.</p>`;
 }
 
 function renderLineupStatus(teamKey, leagueId) {
-  const saved = lineupState[gameKey(teamKey, leagueId)] || [];
-  document.querySelector("#lineupStatus").textContent = saved.length ? `라인업 ${saved.filter(item => item.player).length}명 등록 · 팀원에게 공개 중` : "참가 응답을 바탕으로 라인업을 구성할 수 있습니다.";
+  const game = getNextWeekGame(teamKey, leagueId);
+  const button = document.querySelector("#openLineupBuilder");
+  button.disabled = !game;
+  if (!game) {
+    document.querySelector("#lineupStatus").textContent = "7일 안에 예정된 경기가 생기면 해당 경기의 라인업이 표시됩니다.";
+    return;
+  }
+  const saved = lineupState[gameKey(teamKey, leagueId, game)];
+  const batting = Array.isArray(saved) ? saved : saved?.batting || [];
+  document.querySelector("#lineupStatus").textContent = batting.length ? `${formatGameDate(game.date)} 라인업 ${batting.filter(item => item.player).length}명 등록 · 팀원에게 공개 중` : `${formatGameDate(game.date)} 경기 라인업을 구성할 수 있습니다.`;
 }
 
 function renderLeagueRosterSync(teamKey) {
@@ -282,7 +328,7 @@ function renderTeamPage(key, requestedLeagueId) {
   const leagueSelect = document.querySelector("#teamLeagueSelect");
   const leagueId = populateLeagueSelect(leagueSelect, key, requestedLeagueId || leagueSelect.value);
   const league = getLeague(key, leagueId);
-  const game = league.nextGame;
+  const game = getNextWeekGame(key, leagueId);
   document.querySelector("#teamPageSelect").value = key;
   document.querySelector("#teamPageCrest").childNodes[0].nodeValue = team.initial;
   document.querySelector("#teamMyNumber").textContent = team.number;
@@ -292,16 +338,19 @@ function renderTeamPage(key, requestedLeagueId) {
   document.querySelector("#teamSeasonLabel").textContent = league.season;
   document.querySelector("#teamWins").textContent = league.record;
   document.querySelector("#teamRank").textContent = league.rank;
-  document.querySelector("#nextGameLeague").textContent = `${league.name} · 다음 경기`;
-  document.querySelector("#nextGameDate").textContent = formatGameDate(game.date);
+  document.querySelector("#nextGameLeague").textContent = `${league.name} · 7일 안의 다음 경기`;
+  document.querySelector("#nextGameDate").textContent = game ? formatGameDate(game.date) : "다가오는 7일 내 경기 없음";
   document.querySelector("#nextGameHomeCrest").textContent = team.initial;
   document.querySelector("#nextGameTeam").textContent = team.name;
-  document.querySelector("#nextGameTime").textContent = game.time;
-  document.querySelector("#nextGameVenue").textContent = game.venue;
-  document.querySelector("#nextGameAwayCrest").textContent = game.opponent.slice(0, 1);
-  document.querySelector("#nextGameOpponent").textContent = game.opponent;
+  document.querySelector("#nextGameMatchup").hidden = !game;
+  if (game) {
+    document.querySelector("#nextGameTime").textContent = game.time;
+    document.querySelector("#nextGameVenue").textContent = game.venue;
+    document.querySelector("#nextGameAwayCrest").textContent = game.opponent.slice(0, 1);
+    document.querySelector("#nextGameOpponent").textContent = game.opponent;
+  }
   renderRosterPreview(key);
-  renderAttendance(key, leagueId);
+  renderSchedulePolls(key, leagueId);
   renderLineupStatus(key, leagueId);
 }
 
@@ -392,7 +441,7 @@ function renderRosterManagement(teamKey) {
 }
 
 function saveSchedules() {
-  const snapshot = Object.fromEntries(Object.entries(teamLeagues).map(([teamKey, leagues]) => [teamKey, leagues.map(league => ({ id: league.id, nextGame: league.nextGame }))]));
+  const snapshot = Object.fromEntries(Object.entries(teamLeagues).map(([teamKey, leagues]) => [teamKey, leagues.map(league => ({ id: league.id, nextGame: league.nextGame, games: league.games }))]));
   localStorage.setItem("bbat-box-schedules", JSON.stringify(snapshot));
 }
 
@@ -466,7 +515,16 @@ function fillScheduleForm(teamKey, leagueId) {
   const leagueInput = document.querySelector("#scheduleLeagueInput");
   teamInput.value = teamKey;
   const selectedLeagueId = populateLeagueSelect(leagueInput, teamKey, leagueId);
-  const game = getLeague(teamKey, selectedLeagueId).nextGame;
+  if (scheduleModal.dataset.mode === "create") {
+    document.querySelector("#scheduleOriginalDateInput").value = "";
+    document.querySelector("#scheduleDateInput").value = "";
+    document.querySelector("#scheduleTimeInput").value = "09:00";
+    document.querySelector("#scheduleOpponentInput").value = "";
+    document.querySelector("#scheduleVenueInput").value = "";
+    return;
+  }
+  const game = getUpcomingGames(teamKey, selectedLeagueId)[0] || getLeague(teamKey, selectedLeagueId).nextGame;
+  document.querySelector("#scheduleOriginalDateInput").value = game.date;
   document.querySelector("#scheduleDateInput").value = game.date;
   document.querySelector("#scheduleTimeInput").value = game.time;
   document.querySelector("#scheduleOpponentInput").value = game.opponent;
@@ -477,6 +535,8 @@ function openScheduleEditor() {
   lastScheduleTrigger = document.activeElement;
   const teamKey = document.querySelector("#teamPageSelect").value;
   const leagueId = document.querySelector("#teamLeagueSelect").value;
+  scheduleModal.dataset.mode = lastScheduleTrigger?.id === "openTeamScheduleEditor" ? "create" : "edit";
+  document.querySelector("#scheduleModalTitle").textContent = scheduleModal.dataset.mode === "create" ? "경기 일정 추가" : "경기 일정 추가·수정";
   fillScheduleForm(teamKey, leagueId);
   scheduleModal.hidden = false;
   scheduleBackdrop.hidden = false;
@@ -505,30 +565,52 @@ function closePlayerModal() {
   document.querySelector("#addPlayerButton").focus();
 }
 
-function lineupPositionOptions(player, selected) {
-  return possiblePositions(player).map(position => `<option ${position === selected ? "selected" : ""}>${position}</option>`).join("");
+const lineupPositions = ["P", "C", "1B", "2B", "3B", "SS", "LF", "CF", "RF", "DH"];
+
+function lineupPositionOptions(selected) {
+  return lineupPositions.map(position => `<option ${position === selected ? "selected" : ""}>${position}</option>`).join("");
 }
 
-function renderLineupRows(teamKey, leagueId) {
-  const attendance = ensureAttendance(teamKey, leagueId);
+function lineupPlayerOptions(participants, selectedNumber) {
+  return [`<option value="">미정</option>`, ...participants.map(player => `<option value="${player.number}" ${player.number === selectedNumber ? "selected" : ""}>${player.number} ${player.name} · ${possiblePositions(player).join("/")}</option>`)].join("");
+}
+
+function renderLineupBench(teamKey) {
+  const participants = currentLineupContext.participants;
+  const selected = new Set([
+    document.querySelector("#lineupPitcherSelect").value,
+    ...[...document.querySelectorAll(".lineup-player-select")].map(select => select.value),
+  ].filter(Boolean));
+  const bench = participants.filter(player => !selected.has(player.number));
+  document.querySelector("#lineupBenchList").innerHTML = bench.length ? bench.map(player => `<span><b>${player.number}</b><strong>${player.name}</strong><small>${possiblePositions(player).join("/")}</small></span>`).join("") : `<p>모든 참가 선수가 선발 라인업에 포함되었습니다.</p>`;
+}
+
+function renderLineupRows(teamKey, leagueId, game) {
+  const attendance = ensureAttendance(teamKey, leagueId, game);
   const participants = rosters[teamKey].players.filter(player => attendance[player.name] === "yes");
-  const saved = lineupState[gameKey(teamKey, leagueId)] || [];
+  const stored = lineupState[gameKey(teamKey, leagueId, game)];
+  const saved = Array.isArray(stored) ? { batting: stored, pitcher: "" } : stored || { batting: [], pitcher: "" };
+  currentLineupContext.participants = participants;
   document.querySelector("#lineupParticipants").innerHTML = participants.map(player => `<span><b>${player.number}</b>${player.name}<small>${possiblePositions(player).join("/")}</small></span>`).join("");
+  const defaultPitcher = participants.find(player => player.pitcher)?.number || "";
+  document.querySelector("#lineupPitcherSelect").innerHTML = lineupPlayerOptions(participants, saved.pitcher || defaultPitcher);
   document.querySelector("#lineupOrder").innerHTML = Array.from({ length: 9 }, (_, index) => {
-    const selectedNumber = saved[index]?.player || participants[index]?.number || "";
-    const selectedPlayer = selectedNumber ? participants.find(player => player.number === selectedNumber) : null;
-    const playerOptions = [`<option value="">미정</option>`, ...participants.map(player => `<option value="${player.number}" ${player.number === selectedNumber ? "selected" : ""}>${player.number} ${player.name}</option>`)].join("");
-    return `<div class="lineup-row"><b>${index + 1}</b><label>선수<select class="lineup-player-select">${playerOptions}</select></label><label>수비 위치<select class="lineup-position-select">${selectedPlayer ? lineupPositionOptions(selectedPlayer, saved[index]?.position) : "<option>미정</option>"}</select></label></div>`;
+    const selectedNumber = saved.batting[index]?.player || participants[index]?.number || "";
+    const selectedPosition = saved.batting[index]?.position || lineupPositions[index + 1] || "DH";
+    return `<div class="lineup-row"><b>${index + 1}</b><label>선수<select class="lineup-player-select">${lineupPlayerOptions(participants, selectedNumber)}</select></label><label>수비 위치<select class="lineup-position-select">${lineupPositionOptions(selectedPosition)}</select></label></div>`;
   }).join("");
+  renderLineupBench(teamKey);
 }
 
 function openLineupBuilder() {
   const teamKey = document.querySelector("#teamPageSelect").value;
   const leagueId = document.querySelector("#teamLeagueSelect").value;
   const league = getLeague(teamKey, leagueId);
-  currentLineupContext = { teamKey, leagueId };
-  document.querySelector("#lineupGameLabel").textContent = `${league.name} · ${formatGameDate(league.nextGame.date)}`;
-  renderLineupRows(teamKey, leagueId);
+  const game = getNextWeekGame(teamKey, leagueId);
+  if (!game) return showToast("7일 안에 예정된 경기가 없어 라인업을 열 수 없습니다.");
+  currentLineupContext = { teamKey, leagueId, game, participants: [] };
+  document.querySelector("#lineupGameLabel").textContent = `${league.name} · ${formatGameDate(game.date)} · vs ${game.opponent}`;
+  renderLineupRows(teamKey, leagueId, game);
   lineupModal.hidden = false;
   lineupBackdrop.hidden = false;
   document.body.style.overflow = "hidden";
@@ -610,30 +692,36 @@ document.querySelector("#playerForm").addEventListener("submit", event => {
 });
 document.querySelector("#leagueRosterTeamSelect").addEventListener("change", event => renderLeagueRosterSync(event.target.value));
 document.querySelector("#openTeamScheduleEditor").addEventListener("click", openScheduleEditor);
-document.querySelectorAll("[data-attendance]").forEach(button => button.addEventListener("click", () => {
+document.querySelector("#schedulePollList").addEventListener("click", event => {
+  const button = event.target.closest("[data-attendance]");
+  if (!button || button.disabled) return;
   const teamKey = document.querySelector("#teamPageSelect").value;
   const leagueId = document.querySelector("#teamLeagueSelect").value;
-  ensureAttendance(teamKey, leagueId)["이도윤"] = button.dataset.attendance;
+  const game = getLeagueGames(teamKey, leagueId).find(item => item.date === button.dataset.gameDate);
+  if (!game) return;
+  ensureAttendance(teamKey, leagueId, game)["이도윤"] = button.dataset.attendance;
   localStorage.setItem("bbat-box-attendance", JSON.stringify(attendanceState));
-  renderAttendance(teamKey, leagueId);
+  renderSchedulePolls(teamKey, leagueId);
   renderLineupStatus(teamKey, leagueId);
   showToast(`참가 여부를 '${button.textContent}'로 저장했습니다.`);
-}));
+});
 document.querySelector("#openLineupBuilder").addEventListener("click", openLineupBuilder);
 document.querySelector("#closeLineupModal").addEventListener("click", closeLineupBuilder);
 document.querySelector("#cancelLineup").addEventListener("click", closeLineupBuilder);
 lineupBackdrop.addEventListener("click", closeLineupBuilder);
-document.querySelector("#lineupOrder").addEventListener("change", event => {
-  if (!event.target.classList.contains("lineup-player-select")) return;
-  const teamKey = currentLineupContext.teamKey;
-  const player = rosters[teamKey].players.find(item => item.number === event.target.value);
-  const positionSelect = event.target.closest(".lineup-row").querySelector(".lineup-position-select");
-  positionSelect.innerHTML = player ? lineupPositionOptions(player) : "<option>미정</option>";
+document.querySelector("#lineupForm").addEventListener("change", event => {
+  if (event.target.matches(".lineup-player-select, #lineupPitcherSelect")) renderLineupBench(currentLineupContext.teamKey);
 });
 document.querySelector("#lineupForm").addEventListener("submit", event => {
   event.preventDefault();
   const rows = [...document.querySelectorAll(".lineup-row")];
-  lineupState[gameKey(currentLineupContext.teamKey, currentLineupContext.leagueId)] = rows.map((row, index) => ({ order: index + 1, player: row.querySelector(".lineup-player-select").value, position: row.querySelector(".lineup-position-select").value }));
+  const batting = rows.map((row, index) => ({ order: index + 1, player: row.querySelector(".lineup-player-select").value, position: row.querySelector(".lineup-position-select").value }));
+  const selected = new Set([document.querySelector("#lineupPitcherSelect").value, ...batting.map(item => item.player)].filter(Boolean));
+  lineupState[gameKey(currentLineupContext.teamKey, currentLineupContext.leagueId, currentLineupContext.game)] = {
+    pitcher: document.querySelector("#lineupPitcherSelect").value,
+    batting,
+    bench: currentLineupContext.participants.filter(player => !selected.has(player.number)).map(player => player.number),
+  };
   localStorage.setItem("bbat-box-lineups", JSON.stringify(lineupState));
   renderLineupStatus(currentLineupContext.teamKey, currentLineupContext.leagueId);
   closeLineupBuilder();
@@ -719,19 +807,26 @@ document.querySelector("#scheduleForm").addEventListener("submit", event => {
   const teamKey = document.querySelector("#scheduleTeamInput").value;
   const leagueId = document.querySelector("#scheduleLeagueInput").value;
   const league = getLeague(teamKey, leagueId);
-  league.nextGame = {
+  const savedGame = {
     date: document.querySelector("#scheduleDateInput").value,
     time: document.querySelector("#scheduleTimeInput").value,
     opponent: document.querySelector("#scheduleOpponentInput").value.trim(),
     venue: document.querySelector("#scheduleVenueInput").value.trim()
   };
+  const games = getLeagueGames(teamKey, leagueId);
+  const originalDate = document.querySelector("#scheduleOriginalDateInput").value;
+  const existingIndex = games.findIndex(game => game.date === originalDate);
+  if (existingIndex >= 0) games.splice(existingIndex, 1, savedGame);
+  else games.push(savedGame);
+  games.sort((a, b) => a.date.localeCompare(b.date));
+  league.nextGame = getUpcomingGames(teamKey, leagueId)[0] || savedGame;
   saveSchedules();
   document.querySelector("#teamPageSelect").value = teamKey;
   renderTeamPage(teamKey, leagueId);
   buildCalendar();
   renderCalendarGame(teamKey, leagueId);
   closeScheduleEditor();
-  showToast("일정을 저장해 캘린더와 다음 경기에 반영했습니다.");
+  showToast("일정을 저장하고 참가 투표를 열었습니다.");
 });
 
 const settingsSheet = document.querySelector("#settingsSheet");
