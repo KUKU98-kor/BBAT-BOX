@@ -29,8 +29,7 @@ button:focus-visible, select:focus-visible, textarea:focus-visible { outline: 3p
 
 .app-header { position: sticky; top: 0; z-index: 15; height: 64px; padding: 0 clamp(14px, 3vw, 34px); display: flex; align-items: center; justify-content: space-between; color: white; background: rgba(11, 38, 44, .97); border-bottom: 1px solid rgba(255,255,255,.11); backdrop-filter: blur(16px); }
 .wordmark { min-height: 44px; padding: 0; display: flex; align-items: center; gap: 9px; border: 0; color: white; background: transparent; font-size: 16px; font-weight: 700; letter-spacing: -.04em; }
-.ball-mark { width: 27px; height: 27px; padding: 5px; display: grid; grid-template-columns: repeat(3, 1fr); align-items: end; gap: 2px; background: var(--score); border-radius: 50%; transform: rotate(-8deg); }
-.ball-mark i { height: 55%; background: var(--stadium); border-radius: 3px; }.ball-mark i:nth-child(2) { height: 95%; }.ball-mark i:nth-child(3) { height: 70%; }
+.brand-logo { width: 38px; height: 38px; display: block; object-fit: cover; border: 2px solid rgba(255,255,255,.88); border-radius: 10px; background: white; }
 .always-profile { display: flex; align-items: center; gap: 8px; }
 .mini-avatar { width: 34px; height: 34px; display: grid; place-items: center; color: var(--stadium); background: var(--score); border: 2px solid rgba(255,255,255,.75); border-radius: 50%; font-size: 10px; font-weight: 800; }
 .mini-profile-copy { display: none; }.mini-profile-copy strong, .mini-profile-copy small { display: block; }.mini-profile-copy strong { font-size: 12px; }.mini-profile-copy small { color: #9eb5b4; font-size: 9px; }
