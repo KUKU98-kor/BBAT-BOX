@@ -444,38 +444,70 @@ function saveSchedules() {
   localStorage.setItem("bbat-box-schedules", JSON.stringify(snapshot));
 }
 
+function toDateKey(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+let calendarViewDate = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+let selectedCalendarDate = toDateKey(new Date());
+
+function calendarEntries() {
+  return Object.entries(teamLeagues).flatMap(([teamKey, leagues]) => leagues.flatMap(league => getLeagueGames(teamKey, league.id).map(game => ({ teamKey, leagueId: league.id, league, game }))));
+}
+
+function renderCalendarDay(dateKey, entry = null) {
+  selectedCalendarDate = dateKey;
+  const date = new Date(`${dateKey}T00:00:00`);
+  const event = entry || calendarEntries().find(item => item.game.date === dateKey);
+  document.querySelector("#calendarDayNumber").textContent = date.getDate();
+  document.querySelector("#calendarDayTitle").textContent = formatGameDate(dateKey);
+  document.querySelector("#calendarDayCaption").textContent = dateKey === toDateKey(new Date()) ? "오늘 · 기기 날짜 기준" : "선택한 날짜";
+  const gameCard = document.querySelector("#calendarDayGame");
+  const empty = document.querySelector("#calendarDayEmpty");
+  gameCard.hidden = !event;
+  empty.hidden = Boolean(event);
+  if (event) {
+    const team = teams[event.teamKey];
+    document.querySelector("#calendarGameMeta").textContent = `${event.game.time} · ${event.game.venue}`;
+    document.querySelector("#calendarGameMatchup").textContent = `${team.name} vs ${event.game.opponent}`;
+    document.querySelector("#calendarGameLeague").textContent = `${event.league.name} · 예정 경기`;
+    document.querySelector(".day-game .team-line").className = `team-line ${event.teamKey}`;
+  }
+  document.querySelectorAll(".calendar-cell").forEach(cell => cell.classList.toggle("selected", cell.dataset.calendarDate === dateKey));
+}
+
 function buildCalendar() {
   const grid = document.querySelector("#calendarGrid");
   const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
-  const events = { 5: ["braves"], 7: ["bbat"], 12: ["personal"], 13: ["braves"], 18: ["personal"], 21: ["bbat", "personal"], 27: ["braves"] };
-  Object.entries(teamLeagues).forEach(([teamKey, leagues]) => leagues.forEach(league => {
-    const date = new Date(`${league.nextGame.date}T00:00:00`);
-    if (date.getFullYear() === 2026 && date.getMonth() === 8) {
-      const day = date.getDate();
-      events[day] = [...new Set([...(events[day] || []), teamKey])];
-    }
-  }));
+  const year = calendarViewDate.getFullYear();
+  const month = calendarViewDate.getMonth();
+  const todayKey = toDateKey(new Date());
+  const entries = calendarEntries();
+  const first = new Date(year, month, 1);
+  const start = new Date(year, month, 1 - first.getDay());
+  document.querySelector("#calendarTitle").textContent = `${year}년 ${month + 1}월`;
+  document.querySelector("#calendarCard").setAttribute("aria-label", `${year}년 ${month + 1}월 달력`);
   const cells = weekdays.map(day => `<div class="weekday">${day}</div>`);
-  for (let day = 30; day <= 31; day++) cells.push(`<div class="other">${day}</div>`);
-  for (let day = 1; day <= 30; day++) {
-    const classes = [day === 18 ? "today" : "", day === 21 ? "selected" : ""].filter(Boolean).join(" ");
-    const dots = events[day] ? `<span class="event-dots">${events[day].map(type => `<i class="${type}"></i>`).join("")}</span>` : "";
-    cells.push(`<div class="${classes}">${day}${dots}</div>`);
+  for (let index = 0; index < 42; index += 1) {
+    const date = new Date(start);
+    date.setDate(start.getDate() + index);
+    const dateKey = toDateKey(date);
+    const dayEntries = entries.filter(item => item.game.date === dateKey);
+    const classes = ["calendar-cell", date.getMonth() !== month ? "other" : "", dateKey === todayKey ? "today" : "", dateKey === selectedCalendarDate ? "selected" : ""].filter(Boolean).join(" ");
+    const gameItems = dayEntries.map(item => `<button class="calendar-event ${item.teamKey}" type="button" data-calendar-team="${item.teamKey}" data-calendar-league="${item.leagueId}" data-calendar-date="${dateKey}"><span>${item.game.time}</span><strong>${teams[item.teamKey].name} vs ${item.game.opponent}</strong></button>`).join("");
+    cells.push(`<div class="${classes}" data-calendar-date="${dateKey}"><button class="calendar-date-button" type="button" aria-label="${date.getMonth() + 1}월 ${date.getDate()}일">${date.getDate()}</button><div class="calendar-events">${gameItems}</div></div>`);
   }
   grid.innerHTML = cells.join("");
 }
 
 function renderCalendarGame(teamKey, leagueId) {
-  const team = teams[teamKey];
   const league = getLeague(teamKey, leagueId);
-  const game = league.nextGame;
+  const game = getUpcomingGames(teamKey, leagueId)[0] || league.nextGame;
   const date = new Date(`${game.date}T00:00:00`);
-  document.querySelector("#calendarDayNumber").textContent = date.getDate();
-  document.querySelector("#calendarDayTitle").textContent = formatGameDate(game.date);
-  document.querySelector("#calendarGameMeta").textContent = `${game.time} · ${game.venue}`;
-  document.querySelector("#calendarGameMatchup").textContent = `${team.name} vs ${game.opponent}`;
-  document.querySelector("#calendarGameLeague").textContent = `${league.name} · 예정 경기`;
-  document.querySelector(".day-game .team-line").className = `team-line ${teamKey}`;
+  calendarViewDate = new Date(date.getFullYear(), date.getMonth(), 1);
+  selectedCalendarDate = game.date;
+  buildCalendar();
+  renderCalendarDay(game.date, { teamKey, leagueId, league, game });
 }
 
 function openLiveDetail() {
@@ -594,10 +626,13 @@ function renderLineupBench(teamKey) {
 function renderLineupRows(teamKey, leagueId, game) {
   const attendance = ensureAttendance(teamKey, leagueId, game);
   const participants = rosters[teamKey].players.filter(player => attendance[player.name] === "yes");
+  const available = rosters[teamKey].players.filter(player => attendance[player.name] !== "yes");
   const stored = lineupState[gameKey(teamKey, leagueId, game)];
   const saved = Array.isArray(stored) ? { batting: stored, pitcher: "" } : stored || { batting: [], pitcher: "" };
   currentLineupContext.participants = participants;
   document.querySelector("#lineupParticipants").innerHTML = participants.map(player => `<span><b>${player.number}</b>${player.name}<small>${possiblePositions(player).join("/")}</small></span>`).join("");
+  document.querySelector("#manualParticipantSelect").innerHTML = available.length ? available.map(player => `<option value="${player.number}">${player.number} ${player.name} · ${possiblePositions(player).join("/")}</option>`).join("") : `<option value="">추가할 선수가 없습니다</option>`;
+  document.querySelector("#addManualParticipant").disabled = !available.length;
   const defaultPitcher = participants.find(player => player.pitcher)?.number || "";
   document.querySelector("#lineupPitcherSelect").innerHTML = lineupPlayerOptions(participants, saved.pitcher || defaultPitcher);
   renderRelieverRows(participants, saved.relievers || []);
@@ -716,6 +751,16 @@ document.querySelector("#openLineupBuilder").addEventListener("click", openLineu
 document.querySelector("#closeLineupModal").addEventListener("click", closeLineupBuilder);
 document.querySelector("#cancelLineup").addEventListener("click", closeLineupBuilder);
 lineupBackdrop.addEventListener("click", closeLineupBuilder);
+document.querySelector("#addManualParticipant").addEventListener("click", () => {
+  const number = document.querySelector("#manualParticipantSelect").value;
+  const player = rosters[currentLineupContext.teamKey].players.find(item => item.number === number);
+  if (!player) return;
+  ensureAttendance(currentLineupContext.teamKey, currentLineupContext.leagueId, currentLineupContext.game)[player.name] = "yes";
+  localStorage.setItem("bbat-box-attendance", JSON.stringify(attendanceState));
+  renderLineupRows(currentLineupContext.teamKey, currentLineupContext.leagueId, currentLineupContext.game);
+  renderSchedulePolls(currentLineupContext.teamKey, currentLineupContext.leagueId);
+  showToast(`${player.name} 선수를 참가명단에 추가했습니다.`);
+});
 document.querySelector("#addRelieverButton").addEventListener("click", () => {
   const selected = [...document.querySelectorAll(".reliever-player-select")].map(select => select.value);
   if (selected.length >= 4) return;
@@ -852,6 +897,25 @@ document.querySelector("#scheduleForm").addEventListener("submit", event => {
   showToast("일정을 저장하고 참가 투표를 열었습니다.");
 });
 
+document.querySelector("#previousMonth").addEventListener("click", () => {
+  calendarViewDate = new Date(calendarViewDate.getFullYear(), calendarViewDate.getMonth() - 1, 1);
+  buildCalendar();
+});
+document.querySelector("#nextMonth").addEventListener("click", () => {
+  calendarViewDate = new Date(calendarViewDate.getFullYear(), calendarViewDate.getMonth() + 1, 1);
+  buildCalendar();
+});
+document.querySelector("#calendarGrid").addEventListener("click", event => {
+  const gameButton = event.target.closest(".calendar-event");
+  if (gameButton) {
+    const entry = calendarEntries().find(item => item.teamKey === gameButton.dataset.calendarTeam && item.leagueId === gameButton.dataset.calendarLeague && item.game.date === gameButton.dataset.calendarDate);
+    renderCalendarDay(gameButton.dataset.calendarDate, entry);
+    return;
+  }
+  const dateButton = event.target.closest(".calendar-date-button");
+  if (dateButton) renderCalendarDay(dateButton.closest(".calendar-cell").dataset.calendarDate);
+});
+
 const settingsSheet = document.querySelector("#settingsSheet");
 const modalBackdrop = document.querySelector("#modalBackdrop");
 function openSettings() { settingsSheet.hidden = false; modalBackdrop.hidden = false; document.body.style.overflow = "hidden"; document.querySelector("#closeSettings").focus(); }
@@ -869,18 +933,19 @@ document.addEventListener("keydown", event => {
 
 const didWell = document.querySelector("#didWell");
 const toLearn = document.querySelector("#toLearn");
+const privateNoteKey = `bbat-box-private-note:local-user:${toDateKey(new Date())}`;
 document.querySelector("#saveNoteButton").addEventListener("click", () => {
-  localStorage.setItem("bbat-box-note", JSON.stringify({ didWell: didWell.value, toLearn: toLearn.value }));
-  showToast("9월 21일 야구 노트를 저장했습니다.");
+  localStorage.setItem(privateNoteKey, JSON.stringify({ didWell: didWell.value, toLearn: toLearn.value, visibility: "private" }));
+  showToast("오늘의 개인 노트를 나만 볼 수 있게 저장했습니다.");
 });
 try {
-  const saved = JSON.parse(localStorage.getItem("bbat-box-note"));
+  const saved = JSON.parse(localStorage.getItem(privateNoteKey));
   if (saved) { didWell.value = saved.didWell || ""; toLearn.value = saved.toLearn || ""; }
 } catch (_) { /* 손상된 임시 저장값은 무시합니다. */ }
 
 buildCalendar();
+renderCalendarDay(selectedCalendarDate);
 applyProfilePhoto(savedProfilePhoto);
 renderHomeTeam("bbat");
 renderTeamPage("bbat", "seoul-sunday");
-renderCalendarGame("bbat", "seoul-sunday");
 renderLeagueRosterSync("bbat");
