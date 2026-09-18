@@ -1,182 +1,160 @@
-const players = [
-  { order: 1, number: 7, name: "김민재", position: "유격수", records: [{ result: "1B", running: "도루" }, { result: "F8" }] },
-  { order: 2, number: 14, name: "최현우", position: "2루수", records: [{ result: "BB", running: "득점", run: true }, { result: "K" }] },
-  { order: 3, number: 23, name: "이도윤", position: "중견수", records: [{ result: "2B", rbi: 1 }, { result: "G4" }] },
-  { order: 4, number: 33, name: "장시온", position: "1루수", records: [{ result: "HR", rbi: 2, run: true }, { result: "BB" }] },
-  { order: 5, number: 10, name: "서우진", position: "좌익수", records: [{ result: "K" }, { result: "1B" }] },
-  { order: 6, number: 2, name: "윤태경", position: "포수", records: [{ result: "G6" }, { result: "K" }] },
-  { order: 7, number: 51, name: "오지훈", position: "우익수", records: [{ result: "1B" }, { result: "F7" }] },
-  { order: 8, number: 6, name: "한결", position: "3루수", records: [{ result: "K" }, { result: "BB" }] },
-  { order: 9, number: 39, name: "배준서", position: "지명타자", records: [{ result: "G5" }] },
-];
-
-const allResults = [
-  ["1B", "1루타"], ["2B", "2루타"], ["3B", "3루타"], ["1HR", "1점 홈런"],
-  ["2HR", "2점 홈런"], ["3HR", "3점 홈런"], ["GS", "만루 홈런"], ["BB", "볼넷"],
-  ["HBP", "몸에 맞는 공"], ["K", "삼진"], ["GO", "땅볼"], ["FO", "뜬공"],
-  ["FC", "야수 선택"], ["E", "실책"], ["SAC", "희생타"], ["SF", "희생플라이"],
-];
-
-let selectedPlayerIndex = 2;
-let selectedResult = "1B";
-let rbi = 0;
-let editingIndex = null;
-let pitches = ["볼", "지켜본 스트라이크", "볼"];
-let history = [];
-
-const $ = (selector) => document.querySelector(selector);
-const lineupList = $("#lineupList");
-const atbatGrid = $("#atbatGrid");
-const sheet = $("#recordSheet");
-const backdrop = $("#sheetBackdrop");
-const toast = $("#toast");
-
-function renderLineup() {
-  lineupList.innerHTML = players.map((player, index) => `
-    <li><button class="player-button ${index === selectedPlayerIndex ? "is-active" : ""}" type="button" data-player="${index}" aria-pressed="${index === selectedPlayerIndex}">
-      <span class="bat-order">${player.order}</span><strong>${player.number} ${player.name}</strong><small>${player.position}</small>
-    </button></li>`).join("");
-}
-
-function playerStats(player) {
-  const atBats = player.records.filter(r => !["BB", "HBP", "SAC", "SF"].includes(r.result)).length;
-  const hits = player.records.filter(r => /^(1B|2B|3B|HR|[123]HR|GS)$/.test(r.result)).length;
-  const rbis = player.records.reduce((sum, r) => sum + (r.rbi || 0), 0);
-  return `${atBats}타수 ${hits}안타 ${rbis}타점`;
-}
-
-function renderSelectedPlayer() {
-  const player = players[selectedPlayerIndex];
-  $("#selectedOrder").textContent = `${player.order}번`;
-  $("#selectedPlayer").textContent = player.name;
-  $("#selectedMeta").textContent = `${player.position} · ${playerStats(player)}`;
-  renderGrid();
-}
-
-function renderGrid() {
-  const records = players[selectedPlayerIndex].records;
-  let html = '<div class="grid-corner">타석</div>';
-  for (let i = 0; i < 10; i++) html += `<div class="pa-head">${i + 1}</div>`;
-  html += '<div class="row-label">타격</div>';
-  for (let i = 0; i < 10; i++) {
-    const record = records[i];
-    if (record) {
-      const hitClass = /^(1B|2B|3B)$/.test(record.result) ? "is-hit" : /HR|GS/.test(record.result) ? "is-hr" : "";
-      html += `<button class="record-cell ${hitClass}" data-cell="${i}" type="button"><strong>${record.result}</strong>${record.rbi ? `<small class="rbi-tag">${record.rbi}타점</small>` : ""}</button>`;
-    } else if (i === records.length) {
-      html += `<button class="record-cell is-next" data-cell="${i}" type="button" aria-label="${i + 1}번째 타석 추가"></button>`;
-    } else {
-      html += `<button class="record-cell" data-cell="${i}" type="button" disabled></button>`;
-    }
+const teams = {
+  bbat: {
+    name: "배트조짐", header: "배트조짐 · 중견수", role: "선수 · 기록원", position: "CF", bats: "우투우타", games: "18경기",
+    title: "배트조짐에서의 시즌", trend: "최근 5경기 ▲ .042", summary: "18경기 · 61타석",
+    stats: [["타율", ".348"], ["타점", "21"], ["OPS", ".927"]],
+    teamMeta: "2021년 창단 · 선수 24명 · 서울 일요리그", wins: "12승 1무 5패", rank: "A조 3위"
+  },
+  braves: {
+    name: "브레이브스", header: "브레이브스 · 투수", role: "선수", position: "P", bats: "우투우타", games: "10경기",
+    title: "브레이브스에서의 시즌", trend: "최근 3경기 ERA 1.42", summary: "10경기 · 42⅓이닝",
+    stats: [["방어율", "2.34"], ["삼진", "47"], ["WHIP", "1.08"]],
+    teamMeta: "2019년 창단 · 선수 21명 · 한강 토요리그", wins: "8승 2패", rank: "B조 1위"
+  },
+  solo: {
+    name: "개인 기록", header: "개인 기록 · 외야수", role: "개인 기록", position: "OF", bats: "우투우타", games: "6경기",
+    title: "나의 개인 경기", trend: "최근 경기 2안타", summary: "6경기 · 19타석",
+    stats: [["타율", ".375"], ["타점", "7"], ["OPS", "1.022"]]
   }
-  html += '<div class="row-label">주루</div>';
-  for (let i = 0; i < 10; i++) {
-    const record = records[i];
-    const text = record?.running || (record?.run ? "득점" : "");
-    html += `<div class="record-cell running-cell">${record?.run ? '<span class="run-dot">R</span>' : ""}<span>${text}</span></div>`;
-  }
-  atbatGrid.innerHTML = html;
+};
+
+const screens = [...document.querySelectorAll(".app-screen")];
+const navButtons = [...document.querySelectorAll("[data-nav]")];
+const toast = document.querySelector("#toast");
+
+function showScreen(name) {
+  screens.forEach(screen => {
+    const active = screen.dataset.screen === name;
+    screen.hidden = !active;
+    screen.classList.toggle("is-active", active);
+  });
+  navButtons.forEach(button => {
+    const active = button.dataset.nav === name;
+    button.classList.toggle("active", active);
+    active ? button.setAttribute("aria-current", "page") : button.removeAttribute("aria-current");
+  });
+  if (name !== "live") closeLiveDetail();
+  window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
-function renderPitches() {
-  const labels = { "볼": "B", "지켜본 스트라이크": "C", "헛스윙": "S", "파울": "F", "인플레이": "IP" };
-  const classes = { "볼": "ball", "지켜본 스트라이크": "strike", "헛스윙": "strike", "파울": "foul", "인플레이": "play" };
-  $("#pitchSequence").innerHTML = pitches.length
-    ? pitches.map((pitch, i) => `<span class="pitch-chip ${classes[pitch]}" title="${i + 1}구 ${pitch}">${labels[pitch]}</span>`).join("")
-    : '<span class="pitch-empty">첫 투구를 기록해 주세요.</span>';
-  $("#ballCount").textContent = Math.min(3, pitches.filter(p => p === "볼").length);
-  $("#strikeCount").textContent = Math.min(2, pitches.filter(p => ["지켜본 스트라이크", "헛스윙", "파울"].includes(p)).length);
-}
-
-function openSheet(index = null, result = null) {
-  const player = players[selectedPlayerIndex];
-  editingIndex = index ?? player.records.length;
-  const existing = player.records[editingIndex];
-  selectedResult = result === "HR" ? "1HR" : result || existing?.result || "1B";
-  rbi = existing?.rbi || 0;
-  $("#rbiValue").textContent = rbi;
-  $("#runningNote").value = existing?.running || "";
-  setToggle($("#runToggle"), Boolean(existing?.run));
-  setToggle($("#stealToggle"), existing?.running === "도루");
-  $("#sheetContext").textContent = `${player.order}번 ${player.name} · ${editingIndex + 1}번째 타석`;
-  $("#sheetResults").innerHTML = allResults.map(([value, label]) => `<button type="button" data-sheet-result="${value}" aria-pressed="${value === selectedResult}">${value}<br><small>${label}</small></button>`).join("");
-  sheet.hidden = false;
-  backdrop.hidden = false;
-  document.body.style.overflow = "hidden";
-  $("#closeSheet").focus();
-}
-
-function closeSheet() {
-  sheet.hidden = true;
-  backdrop.hidden = true;
-  document.body.style.overflow = "";
-  $("#newRecordButton").focus();
-}
-
-function setToggle(button, on) { button.setAttribute("aria-pressed", String(on)); }
 function showToast(message) {
-  toast.textContent = message; toast.classList.add("show");
-  clearTimeout(showToast.timer); showToast.timer = setTimeout(() => toast.classList.remove("show"), 2200);
+  toast.textContent = message;
+  toast.classList.add("show");
+  clearTimeout(showToast.timer);
+  showToast.timer = setTimeout(() => toast.classList.remove("show"), 2200);
 }
 
-function saveState() {
-  localStorage.setItem("playbook-draft", JSON.stringify(players));
+function renderHomeTeam(key) {
+  const team = teams[key];
+  document.querySelector("#headerTeam").textContent = team.header;
+  document.querySelector("#profileTeam").textContent = team.name;
+  document.querySelector("#profileRole").textContent = team.role;
+  document.querySelector("#profilePosition").textContent = team.position;
+  document.querySelector("#profileBats").textContent = team.bats;
+  document.querySelector("#profileGames").textContent = team.games;
+  document.querySelector("#seasonTitle").textContent = team.title;
+  document.querySelector("#seasonTrend").textContent = team.trend;
+  document.querySelector("#recordSummary").textContent = team.summary;
+  document.querySelector("#homeStats").innerHTML = team.stats.map(([label, value], index) => `<div class="${index === 0 ? "key" : ""}"><small>${label}</small><strong>${value}</strong></div>`).join("");
 }
 
-lineupList.addEventListener("click", (event) => {
-  const button = event.target.closest("[data-player]"); if (!button) return;
-  selectedPlayerIndex = Number(button.dataset.player); renderLineup(); renderSelectedPlayer();
+function renderTeamPage(key) {
+  const team = teams[key];
+  document.querySelector("#teamName").textContent = team.name;
+  document.querySelector("#teamMeta").textContent = team.teamMeta;
+  document.querySelector("#teamWins").textContent = team.wins;
+  document.querySelector("#teamRank").textContent = team.rank;
+}
+
+function buildCalendar() {
+  const grid = document.querySelector("#calendarGrid");
+  const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
+  const events = { 5: ["braves"], 7: ["bbat"], 12: ["personal"], 13: ["braves"], 18: ["personal"], 21: ["bbat", "personal"], 27: ["braves"] };
+  const cells = weekdays.map(day => `<div class="weekday">${day}</div>`);
+  for (let day = 30; day <= 31; day++) cells.push(`<div class="other">${day}</div>`);
+  for (let day = 1; day <= 30; day++) {
+    const classes = [day === 18 ? "today" : "", day === 21 ? "selected" : ""].filter(Boolean).join(" ");
+    const dots = events[day] ? `<span class="event-dots">${events[day].map(type => `<i class="${type}"></i>`).join("")}</span>` : "";
+    cells.push(`<div class="${classes}">${day}${dots}</div>`);
+  }
+  grid.innerHTML = cells.join("");
+}
+
+function openLiveDetail() {
+  document.querySelector("#liveGameList").hidden = true;
+  document.querySelector("#liveStadium").hidden = false;
+  document.querySelector("#liveStadium").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function closeLiveDetail() {
+  const stadium = document.querySelector("#liveStadium");
+  const list = document.querySelector("#liveGameList");
+  if (stadium && list) { stadium.hidden = true; list.hidden = false; }
+}
+
+function renderLiveTab(tab) {
+  const list = document.querySelector("#liveGameList");
+  closeLiveDetail();
+  if (tab === "playing") {
+    list.innerHTML = `<button class="live-game-card" type="button" data-open-live="main"><span class="live-now"><i></i>LIVE</span><div class="live-teams"><div><span class="small-crest home">B</span><strong>배트조짐</strong><b>3</b></div><div class="inning"><strong>5회초</strong><small>2사 · 주자 1루</small></div><div><span class="small-crest away">W</span><strong>웨일즈</strong><b>2</b></div></div><span class="watch-live">상황판 보기</span></button>`;
+  } else {
+    list.innerHTML = `<button class="live-game-card finished" type="button"><span class="date-line">경기 종료 · 9월 14일</span><div class="live-teams"><div><span class="small-crest home">B</span><strong>브레이브스</strong><b>7</b></div><div class="inning"><strong>종료</strong><small>한강 토요리그</small></div><div><span class="small-crest away">T</span><strong>타이탄즈</strong><b>4</b></div></div><span class="watch-live">경기 기록 보기</span></button><button class="live-game-card finished" type="button"><span class="date-line">경기 종료 · 9월 7일</span><div class="live-teams"><div><span class="small-crest home">B</span><strong>배트조짐</strong><b>5</b></div><div class="inning"><strong>종료</strong><small>서울 일요리그</small></div><div><span class="small-crest away">R</span><strong>러너스</strong><b>5</b></div></div><span class="watch-live">경기 기록 보기</span></button>`;
+  }
+}
+
+document.addEventListener("click", event => {
+  const nav = event.target.closest("[data-nav]");
+  const go = event.target.closest("[data-go]");
+  if (nav) showScreen(nav.dataset.nav);
+  if (go) showScreen(go.dataset.go);
+  if (event.target.closest("[data-open-live]")) openLiveDetail();
 });
 
-atbatGrid.addEventListener("click", (event) => {
-  const cell = event.target.closest("[data-cell]"); if (!cell) return; openSheet(Number(cell.dataset.cell));
+document.querySelector("#homeTeamSelect").addEventListener("change", event => renderHomeTeam(event.target.value));
+document.querySelector("#teamPageSelect").addEventListener("change", event => renderTeamPage(event.target.value));
+
+document.querySelector("#leagueAccordion").addEventListener("click", event => {
+  const toggle = event.target.closest(".league-toggle");
+  if (!toggle) return;
+  const row = toggle.closest(".league-row");
+  const willOpen = !row.classList.contains("is-open");
+  document.querySelectorAll(".league-row").forEach(item => {
+    item.classList.remove("is-open");
+    item.querySelector(".league-toggle").setAttribute("aria-expanded", "false");
+  });
+  row.classList.toggle("is-open", willOpen);
+  toggle.setAttribute("aria-expanded", String(willOpen));
 });
 
-document.querySelectorAll("[data-pitch]").forEach(button => button.addEventListener("click", () => {
-  pitches.push(button.dataset.pitch); renderPitches();
+document.querySelectorAll("[data-live-tab]").forEach(button => button.addEventListener("click", () => {
+  document.querySelectorAll("[data-live-tab]").forEach(item => item.classList.toggle("active", item === button));
+  renderLiveTab(button.dataset.liveTab);
 }));
 
-$("#resultButtons").addEventListener("click", (event) => {
-  const button = event.target.closest("[data-result]"); if (button) openSheet(null, button.dataset.result);
+document.querySelector("#closeLiveDetail").addEventListener("click", closeLiveDetail);
+document.querySelector("#openScorebook").addEventListener("click", () => showToast("기록 입력 화면은 다음 단계에서 LIVE와 연결할 예정입니다."));
+document.querySelector(".permission-action").addEventListener("click", () => showToast("리그 생성은 팀 리더 권한 확인 후 열립니다."));
+document.querySelector("#joinTeamButton").addEventListener("click", () => showToast("참가 코드 입력 화면은 다음 단계에서 연결합니다."));
+
+const settingsSheet = document.querySelector("#settingsSheet");
+const modalBackdrop = document.querySelector("#modalBackdrop");
+function openSettings() { settingsSheet.hidden = false; modalBackdrop.hidden = false; document.body.style.overflow = "hidden"; document.querySelector("#closeSettings").focus(); }
+function closeSettings() { settingsSheet.hidden = true; modalBackdrop.hidden = true; document.body.style.overflow = ""; document.querySelector("#settingsButton").focus(); }
+document.querySelector("#settingsButton").addEventListener("click", openSettings);
+document.querySelector("#closeSettings").addEventListener("click", closeSettings);
+modalBackdrop.addEventListener("click", closeSettings);
+document.addEventListener("keydown", event => { if (event.key === "Escape" && !settingsSheet.hidden) closeSettings(); });
+
+const didWell = document.querySelector("#didWell");
+const toLearn = document.querySelector("#toLearn");
+document.querySelector("#saveNoteButton").addEventListener("click", () => {
+  localStorage.setItem("bbat-box-note", JSON.stringify({ didWell: didWell.value, toLearn: toLearn.value }));
+  showToast("9월 21일 야구 노트를 저장했습니다.");
 });
-$("#newRecordButton").addEventListener("click", () => openSheet());
-$("#moreResults").addEventListener("click", () => openSheet());
-$("#closeSheet").addEventListener("click", closeSheet);
-$("#cancelSheet").addEventListener("click", closeSheet);
-backdrop.addEventListener("click", closeSheet);
-
-$("#sheetResults").addEventListener("click", (event) => {
-  const button = event.target.closest("[data-sheet-result]"); if (!button) return;
-  selectedResult = button.dataset.sheetResult;
-  document.querySelectorAll("[data-sheet-result]").forEach(b => b.setAttribute("aria-pressed", String(b === button)));
-});
-
-document.querySelectorAll("[data-rbi-change]").forEach(button => button.addEventListener("click", () => {
-  rbi = Math.max(0, Math.min(4, rbi + Number(button.dataset.rbiChange))); $("#rbiValue").textContent = rbi;
-}));
-
-[$("#runToggle"), $("#stealToggle")].forEach(button => button.addEventListener("click", () => setToggle(button, button.getAttribute("aria-pressed") !== "true")));
-
-$("#saveRecord").addEventListener("click", () => {
-  const player = players[selectedPlayerIndex];
-  history.push(JSON.stringify(players));
-  const runningNote = $("#runningNote").value.trim();
-  player.records[editingIndex] = { result: selectedResult, rbi, run: $("#runToggle").getAttribute("aria-pressed") === "true", running: $("#stealToggle").getAttribute("aria-pressed") === "true" ? "도루" : runningNote };
-  saveState(); renderSelectedPlayer(); closeSheet(); showToast(`${player.name} 선수의 ${editingIndex + 1}번째 타석을 저장했습니다.`);
-});
-
-$("#undoButton").addEventListener("click", () => {
-  if (!history.length) return showToast("되돌릴 기록이 없습니다.");
-  const previous = JSON.parse(history.pop()); previous.forEach((player, i) => players[i].records = player.records);
-  saveState(); renderSelectedPlayer(); showToast("마지막 기록을 되돌렸습니다.");
-});
-
-$("#substituteButton").addEventListener("click", () => showToast("선수 교체 기능은 다음 단계에서 연결됩니다."));
-document.addEventListener("keydown", event => { if (event.key === "Escape" && !sheet.hidden) closeSheet(); });
-
 try {
-  const stored = JSON.parse(localStorage.getItem("playbook-draft"));
-  if (Array.isArray(stored) && stored.length === players.length) stored.forEach((player, i) => players[i].records = player.records || []);
-} catch (_) { /* 손상된 임시 저장값은 기본 기록으로 대체 */ }
+  const saved = JSON.parse(localStorage.getItem("bbat-box-note"));
+  if (saved) { didWell.value = saved.didWell || ""; toLearn.value = saved.toLearn || ""; }
+} catch (_) { /* 손상된 임시 저장값은 무시합니다. */ }
 
-renderLineup(); renderSelectedPlayer(); renderPitches();
+buildCalendar();
+renderHomeTeam("bbat");
