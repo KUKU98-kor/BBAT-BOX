@@ -14,7 +14,7 @@
     <a class="skip-link" href="#appMain">본문으로 건너뛰기</a>
     <header class="app-header">
       <button class="wordmark" type="button" data-go="home" aria-label="BBAT BOX 홈"><img class="brand-logo" src="assets/bbat-box-logo.png" alt="" /><span>BBAT BOX</span></button>
-      <div class="always-profile"><div class="mini-avatar" aria-hidden="true"><span>23</span></div><div class="mini-profile-copy"><strong>이도윤</strong><small id="headerTeam">배트조짐 · 중견수</small></div><button class="settings-button" id="settingsButton" type="button" aria-label="설정 열기"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.5A3.5 3.5 0 1 0 12 8a3.5 3.5 0 0 0 0 7.5Z"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56V21h-4v-.08A1.7 1.7 0 0 0 9 19.37a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.63 15a1.7 1.7 0 0 0-1.56-1H3v-4h.08A1.7 1.7 0 0 0 4.63 9a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.63a1.7 1.7 0 0 0 1-1.56V3h4v.08A1.7 1.7 0 0 0 15 4.63a1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.37 9a1.7 1.7 0 0 0 1.56 1H21v4h-.08A1.7 1.7 0 0 0 19.4 15Z"/></svg></button></div>
+      <div class="always-profile"><div class="mini-avatar" aria-hidden="true"><span id="headerNumber">23</span></div><div class="mini-profile-copy"><strong>이도윤</strong><small id="headerTeam">배트조짐 · 중견수</small></div><button class="settings-button" id="settingsButton" type="button" aria-label="설정 열기"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.5A3.5 3.5 0 1 0 12 8a3.5 3.5 0 0 0 0 7.5Z"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56V21h-4v-.08A1.7 1.7 0 0 0 9 19.37a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.63 15a1.7 1.7 0 0 0-1.56-1H3v-4h.08A1.7 1.7 0 0 0 4.63 9a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.63a1.7 1.7 0 0 0 1-1.56V3h4v.08A1.7 1.7 0 0 0 15 4.63a1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.37 9a1.7 1.7 0 0 0 1.56 1H21v4h-.08A1.7 1.7 0 0 0 19.4 15Z"/></svg></button></div>
     </header>
 
     <main id="appMain" class="app-main">
@@ -28,15 +28,28 @@
               <div class="team-info-foot"><span id="profileLeague">서울 일요리그</span><b id="profileTeamStanding">A조 3위</b></div>
             </article>
             <article class="player-card" aria-label="내 프로필">
-              <div class="player-card-top"><span>내 프로필</span><button type="button" aria-label="프로필 자세히 보기">자세히</button></div>
-              <div class="player-identity"><div class="portrait"><span class="portrait-number">23</span><span class="portrait-name">DOYOON</span></div><div><p>PLAYER</p><h2>이도윤</h2><div class="position-row"><span id="profilePosition">CF</span><span id="profileBats">우투우타</span></div></div></div>
-              <dl class="profile-details"><div><dt>등번호</dt><dd>23</dd></div><div><dt>가입일</dt><dd>2024.03</dd></div><div><dt>출전</dt><dd id="profileGames">18경기</dd></div></dl>
+              <div class="player-card-top"><span>내 프로필</span></div>
+              <div class="player-identity"><div class="profile-photo" aria-hidden="true"><svg viewBox="0 0 80 96"><circle cx="40" cy="30" r="17"/><path d="M13 90c2-24 10-37 27-37s25 13 27 37"/><path d="M20 65c12 8 28 8 40 0"/></svg><span>PROFILE</span></div><div><p>PLAYER</p><div class="profile-name-line"><h2 id="profileDisplayName">이도윤</h2><strong id="profileNumber">N.23</strong></div><div class="position-row"><span id="profilePosition">CF</span><span id="profileBats">우투우타</span></div></div></div>
+              <dl class="profile-details"><div><dt>소속</dt><dd id="profileTeamShort">배트조짐</dd></div><div><dt>가입일</dt><dd>2024.03</dd></div><div><dt>출전</dt><dd id="profileGames">18경기</dd></div></dl>
+              <button class="profile-card-hit" id="openProfileEditor" type="button" aria-label="내 프로필 수정하기"></button>
             </article>
           </div>
           <div class="home-content">
             <section class="season-board" aria-labelledby="seasonTitle"><div class="section-head"><div><p>올해 전체 기록</p><h2 id="seasonTitle">배트조짐에서의 시즌</h2></div><span class="trend" id="seasonTrend">최근 5경기 ▲ .042</span></div><div class="stat-ribbon" id="homeStats"></div><div class="record-foot"><span id="recordSummary">18경기 · 61타석</span><button type="button" data-go="league">기록 자세히 보기</button></div></section>
             <section class="league-shelf" aria-labelledby="myLeaguesTitle"><div class="section-head"><div><p>참여 중인 리그</p><h2 id="myLeaguesTitle">내 리그</h2></div><button class="text-button" type="button" data-go="league">전체 보기</button></div><div class="league-mini-list"><button type="button" data-go="league"><span class="league-emblem seoul">S</span><span><strong>서울 일요리그</strong><small>배트조짐 · A조 3위</small></span><b>진행 중</b></button><button type="button" data-go="league"><span class="league-emblem river">R</span><span><strong>한강 토요리그</strong><small>브레이브스 · B조 1위</small></span><b>진행 중</b></button></div></section>
           </div>
+        </div>
+      </section>
+
+      <section class="app-screen profile-editor-screen" id="screen-profile" data-screen="profile" aria-labelledby="profileEditorTitle" hidden>
+        <div class="profile-editor-head"><button class="back-button-light" id="profileBackButton" type="button">‹ MY BOX</button><div><p class="date-line">내 프로필</p><h1 id="profileEditorTitle">프로필 수정</h1></div></div>
+        <div class="profile-editor-layout">
+          <section class="photo-editor-card"><div class="profile-photo large"><svg viewBox="0 0 80 96"><circle cx="40" cy="30" r="17"/><path d="M13 90c2-24 10-37 27-37s25 13 27 37"/><path d="M20 65c12 8 28 8 40 0"/></svg><span>PROFILE</span></div><h2>이도윤</h2><p id="editorTeamCaption">배트조짐 · N.23</p><button class="outline-action" type="button" id="changePhotoButton">사진 변경</button></section>
+          <form class="profile-form" id="profileForm">
+            <div class="section-head"><div><p>선수 정보</p><h2>기본 프로필</h2></div><span class="role-badge edit">본인만 수정</span></div>
+            <div class="form-grid"><label>이름<input id="profileNameInput" value="이도윤" /></label><label>팀<select id="profileTeamSelect"><option value="bbat">배트조짐</option><option value="braves">브레이브스</option><option value="solo">개인 기록</option></select></label><label>등번호<input id="profileNumberInput" inputmode="numeric" value="23" maxlength="3" /></label><label>주 포지션<select id="profilePositionInput"><option>CF</option><option>P</option><option>SS</option><option>2B</option><option>C</option><option>OF</option></select></label><label>투구<select id="throwHandInput"><option>우투</option><option>좌투</option></select></label><label>타격<select id="batHandInput"><option>우타</option><option>좌타</option><option>양타</option></select></label></div>
+            <div class="form-actions"><button class="outline-action" id="cancelProfileEdit" type="button">취소</button><button class="primary-action" type="submit">변경사항 저장</button></div>
+          </form>
         </div>
       </section>
 

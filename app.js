@@ -1,21 +1,21 @@
 const teams = {
   bbat: {
     name: "배트조짐", header: "배트조짐 · 중견수", role: "선수 · 기록원", position: "CF", bats: "우투우타", games: "18경기",
-    initial: "B", league: "서울 일요리그", standing: "A조 3위",
+    number: "23", initial: "B", league: "서울 일요리그", standing: "A조 3위",
     title: "배트조짐에서의 시즌", trend: "최근 5경기 ▲ .042", summary: "18경기 · 61타석",
     stats: [["타율", ".348"], ["타점", "21"], ["OPS", ".927"]],
     teamMeta: "2021년 창단 · 선수 24명 · 서울 일요리그", wins: "12승 1무 5패", rank: "A조 3위"
   },
   braves: {
     name: "브레이브스", header: "브레이브스 · 투수", role: "선수", position: "P", bats: "우투우타", games: "10경기",
-    initial: "BR", league: "한강 토요리그", standing: "B조 1위",
+    number: "18", initial: "BR", league: "한강 토요리그", standing: "B조 1위",
     title: "브레이브스에서의 시즌", trend: "최근 3경기 ERA 1.42", summary: "10경기 · 42⅓이닝",
     stats: [["방어율", "2.34"], ["삼진", "47"], ["WHIP", "1.08"]],
     teamMeta: "2019년 창단 · 선수 21명 · 한강 토요리그", wins: "8승 2패", rank: "B조 1위"
   },
   solo: {
     name: "개인 기록", header: "개인 기록 · 외야수", role: "개인 기록", position: "OF", bats: "우투우타", games: "6경기",
-    initial: "ME", league: "연습 경기와 친선전", standing: "직접 기록",
+    number: "7", initial: "ME", league: "연습 경기와 친선전", standing: "직접 기록",
     title: "나의 개인 경기", trend: "최근 경기 2안타", summary: "6경기 · 19타석",
     stats: [["타율", ".375"], ["타점", "7"], ["OPS", "1.022"]]
   }
@@ -24,6 +24,7 @@ const teams = {
 const screens = [...document.querySelectorAll(".app-screen")];
 const navButtons = [...document.querySelectorAll("[data-nav]")];
 const toast = document.querySelector("#toast");
+const positionLabels = { CF: "중견수", P: "투수", SS: "유격수", "2B": "2루수", C: "포수", OF: "외야수" };
 
 function showScreen(name) {
   screens.forEach(screen => {
@@ -32,7 +33,7 @@ function showScreen(name) {
     screen.classList.toggle("is-active", active);
   });
   navButtons.forEach(button => {
-    const active = button.dataset.nav === name;
+    const active = button.dataset.nav === (name === "profile" ? "home" : name);
     button.classList.toggle("active", active);
     active ? button.setAttribute("aria-current", "page") : button.removeAttribute("aria-current");
   });
@@ -49,12 +50,16 @@ function showToast(message) {
 
 function renderHomeTeam(key) {
   const team = teams[key];
+  document.querySelector("#homeTeamSelect").value = key;
   document.querySelector("#headerTeam").textContent = team.header;
+  document.querySelector("#headerNumber").textContent = team.number;
   document.querySelector("#profileTeam").textContent = team.name;
   document.querySelector("#profileTeamInitial").textContent = team.initial;
   document.querySelector("#profileRole").textContent = team.role;
   document.querySelector("#profileLeague").textContent = team.league;
   document.querySelector("#profileTeamStanding").textContent = team.standing;
+  document.querySelector("#profileNumber").textContent = `N.${team.number}`;
+  document.querySelector("#profileTeamShort").textContent = team.name;
   document.querySelector("#profilePosition").textContent = team.position;
   document.querySelector("#profileBats").textContent = team.bats;
   document.querySelector("#profileGames").textContent = team.games;
@@ -62,6 +67,18 @@ function renderHomeTeam(key) {
   document.querySelector("#seasonTrend").textContent = team.trend;
   document.querySelector("#recordSummary").textContent = team.summary;
   document.querySelector("#homeStats").innerHTML = team.stats.map(([label, value], index) => `<div class="${index === 0 ? "key" : ""}"><small>${label}</small><strong>${value}</strong></div>`).join("");
+}
+
+function openProfileEditor() {
+  const key = document.querySelector("#homeTeamSelect").value;
+  const team = teams[key];
+  document.querySelector("#profileTeamSelect").value = key;
+  document.querySelector("#profileNumberInput").value = team.number;
+  document.querySelector("#profilePositionInput").value = team.position;
+  document.querySelector("#throwHandInput").value = team.bats.slice(0, 2);
+  document.querySelector("#batHandInput").value = team.bats.slice(2);
+  document.querySelector("#editorTeamCaption").textContent = `${team.name} · N.${team.number}`;
+  showScreen("profile");
 }
 
 function renderTeamPage(key) {
@@ -118,6 +135,37 @@ document.addEventListener("click", event => {
 
 document.querySelector("#homeTeamSelect").addEventListener("change", event => renderHomeTeam(event.target.value));
 document.querySelector("#teamPageSelect").addEventListener("change", event => renderTeamPage(event.target.value));
+document.querySelector("#openProfileEditor").addEventListener("click", openProfileEditor);
+document.querySelector("#profileBackButton").addEventListener("click", () => showScreen("home"));
+document.querySelector("#cancelProfileEdit").addEventListener("click", () => showScreen("home"));
+document.querySelector("#changePhotoButton").addEventListener("click", () => showToast("사진 업로드 기능은 다음 단계에서 연결합니다."));
+document.querySelector("#profileTeamSelect").addEventListener("change", event => {
+  const team = teams[event.target.value];
+  document.querySelector("#profileNumberInput").value = team.number;
+  document.querySelector("#profilePositionInput").value = team.position;
+  document.querySelector("#throwHandInput").value = team.bats.slice(0, 2);
+  document.querySelector("#batHandInput").value = team.bats.slice(2);
+  document.querySelector("#editorTeamCaption").textContent = `${team.name} · N.${team.number}`;
+});
+document.querySelector("#profileForm").addEventListener("submit", event => {
+  event.preventDefault();
+  const key = document.querySelector("#profileTeamSelect").value;
+  const name = document.querySelector("#profileNameInput").value.trim() || "이도윤";
+  const number = document.querySelector("#profileNumberInput").value.trim() || teams[key].number;
+  const position = document.querySelector("#profilePositionInput").value;
+  const throws = document.querySelector("#throwHandInput").value;
+  const bats = document.querySelector("#batHandInput").value;
+  teams[key].number = number;
+  teams[key].position = position;
+  teams[key].bats = `${throws}${bats}`;
+  teams[key].header = `${teams[key].name} · ${positionLabels[position] || position}`;
+  document.querySelector("#profileDisplayName").textContent = name;
+  document.querySelector(".mini-profile-copy strong").textContent = name;
+  document.querySelector(".photo-editor-card h2").textContent = name;
+  renderHomeTeam(key);
+  showScreen("home");
+  showToast("프로필 변경사항을 저장했습니다.");
+});
 
 document.querySelector("#leagueAccordion").addEventListener("click", event => {
   const toggle = event.target.closest(".league-toggle");
