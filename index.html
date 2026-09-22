@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="styles.css?v=3" />
+    <link rel="stylesheet" href="styles.css?v=4" />
   </head>
   <body>
     <a class="skip-link" href="#appMain">본문으로 건너뛰기</a>
@@ -127,9 +127,11 @@
     </section>
     <section class="score-summary-grid" id="scoreSummaryGrid"></section>
     <section class="game-flow-bar" id="gameFlowBar" aria-label="현재 경기 흐름">
-      <button class="inning-step" id="advanceInning" type="button" aria-label="다음 공격으로 넘기기">
-        <small>현재 공격</small><strong id="flowInning">1회초</strong><span id="flowBattingTeam">상대팀 공격</span>
-      </button>
+      <div class="inning-navigator" aria-label="공격 순서 이동">
+        <button class="inning-arrow previous" id="previousInning" type="button" aria-label="이전 공격으로 돌아가기">←<small>이전</small></button>
+        <div class="inning-step" aria-live="polite"><small>현재 공격</small><strong id="flowInning">1회초</strong><span id="flowBattingTeam">상대팀 공격</span></div>
+        <button class="inning-arrow next" id="advanceInning" type="button" aria-label="다음 공격으로 넘기기">→<small>다음</small></button>
+      </div>
       <div class="flow-score" aria-label="현재 점수">
         <span><small id="flowOurTeam">배트조짐</small><b id="flowOurRuns">0</b></span>
         <i>:</i>
@@ -177,6 +179,6 @@
     <div class="modal-backdrop" id="modalBackdrop" hidden></div>
     <aside class="settings-sheet" id="settingsSheet" role="dialog" aria-modal="true" aria-labelledby="settingsTitle" hidden><header><div><p>내 계정</p><h2 id="settingsTitle">설정</h2></div><button id="closeSettings" type="button" aria-label="설정 닫기">×</button></header><div class="settings-user"><div class="mini-avatar large"><span>23</span></div><div><strong>이도윤</strong><small>kuku98 · 선수 / 기록원</small></div></div><button class="setting-row" type="button"><span>프로필 수정</span><b>›</b></button><button class="setting-row" type="button"><span>알림 설정</span><b>›</b></button><button class="setting-row" type="button"><span>팀 및 권한</span><b>›</b></button><button class="setting-row" type="button"><span>개인정보 및 보안</span><b>›</b></button></aside>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="app.js?v=3"></script><script src="scorebook.js?v=3"></script>
+    <script src="app.js?v=4"></script><script src="scorebook.js?v=4"></script>
   </body>
 </html>
