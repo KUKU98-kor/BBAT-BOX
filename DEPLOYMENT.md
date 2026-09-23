@@ -30,6 +30,17 @@
 
 연결 후에는 `beta` 브랜치에 푸시할 때마다 새로운 테스트 주소가 자동 생성됩니다. 최종 서비스가 준비되기 전까지 `main` 프로덕션 배포 대신 Preview 주소만 팀원에게 전달하는 편이 안전합니다.
 
+## GitHub Pages 테스트 배포
+
+저장소에는 `beta` 브랜치를 GitHub Pages로 자동 배포하는 워크플로가 포함되어 있습니다.
+
+1. GitHub 저장소의 **Settings → Pages**로 이동합니다.
+2. **Build and deployment → Source**를 **GitHub Actions**로 선택합니다.
+3. Actions 탭에서 **Deploy beta to GitHub Pages**를 한 번 실행하거나 `beta` 브랜치에 새 변경사항을 푸시합니다.
+4. 배포 주소는 `https://kuku98-kor.github.io/BBAT-BOX/`입니다.
+
+Pages 활성화는 저장소 소유자가 최초 한 번만 설정하면 됩니다. 이후에는 `beta` 브랜치 푸시만으로 같은 주소가 자동 갱신됩니다.
+
 ## 서버 로그인 전환 순서
 
 1. Supabase 프로젝트 생성
@@ -52,4 +63,3 @@
 - 일반 사용자에게 팀·리그 편집 버튼이 보이지 않는지 확인
 - 호스트만 초대, 선수 관리, 일정, 라인업, 기록 수정이 가능한지 확인
 - 서로 다른 두 기기에서 같은 경기 LIVE가 갱신되는지 확인
-
