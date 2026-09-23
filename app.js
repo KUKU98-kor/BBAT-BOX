@@ -155,7 +155,7 @@ function showScreen(name) {
     button.classList.toggle("active", active);
     active ? button.setAttribute("aria-current", "page") : button.removeAttribute("aria-current");
   });
-  if (name !== "live") closeLiveDetail();
+  if (name !== "live") closeLiveDetail(true);
   if (name === "live") renderLiveTab(document.querySelector("[data-live-tab].active")?.dataset.liveTab || "playing");
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
@@ -378,6 +378,23 @@ function hittingRecord(player, index) {
   return { G: games, PA: pa, AB: atBats, H: hits, "2B": Math.max(1, Math.round(hits * .2)), "3B": index % 3, HR: homeRuns, RBI: 8 + homeRuns * 3 + index, R: 9 + index, BB: walks, SB: Math.max(0, 10 - index), AVG: player.avg.toFixed(3).replace(/^0/, ""), OPS: player.ops.toFixed(3).replace(/^0/, "") };
 }
 
+function linkedHittingRecord(teamKey, player) {
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem("bbat-box-linked-player-stats-v1") || "{}"); } catch (_) { saved = {}; }
+  const lines = Object.values(saved).filter(game => game?.teamKey === teamKey).flatMap(game => game.players || []).filter(line => line.name === player.name);
+  if (!lines.some(line => Number(line.PA) > 0)) return null;
+  const fields = ["G", "PA", "AB", "H", "2B", "3B", "HR", "RBI", "R", "BB", "HBP", "SO", "SB"];
+  const total = Object.fromEntries(fields.map(field => [field, lines.reduce((sum, line) => sum + (Number(line[field]) || 0), 0)]));
+  const singles = Math.max(0, total.H - total["2B"] - total["3B"] - total.HR);
+  const totalBases = singles + total["2B"] * 2 + total["3B"] * 3 + total.HR * 4;
+  const onBaseDenominator = total.AB + total.BB + total.HBP;
+  const obp = onBaseDenominator ? (total.H + total.BB + total.HBP) / onBaseDenominator : 0;
+  const slg = total.AB ? totalBases / total.AB : 0;
+  total.AVG = total.AB ? (total.H / total.AB).toFixed(3).replace(/^0/, "") : ".000";
+  total.OPS = (obp + slg).toFixed(3).replace(/^0/, "");
+  return total;
+}
+
 function pitchingRecord(player, index) {
   const era = Number(player.stat);
   const innings = 42.1 - index * 4.2;
@@ -392,7 +409,7 @@ function renderRosterTable(teamKey) {
   const columns = [...metricColumns, ...Array(13 - metricColumns.length).fill("")];
   document.querySelector("#playerRecordTableHead").innerHTML = `<tr><th>사진</th><th>등번호</th><th>이름</th><th>포지션</th>${columns.map(column => `<th>${column}</th>`).join("")}</tr>`;
   document.querySelector("#playerRecordTableBody").innerHTML = visiblePlayers.map(({ player, index }, visibleIndex) => {
-    const record = rosterRecordMode === "hitting" ? hittingRecord(player, index) : pitchingRecord(player, visibleIndex);
+    const record = rosterRecordMode === "hitting" ? (linkedHittingRecord(teamKey, player) || hittingRecord(player, index)) : pitchingRecord(player, visibleIndex);
     return `<tr class="${index === selectedRosterPlayerIndex ? "active" : ""}" data-player-row="${index}" data-player-index="${index}"><td><span class="table-player-photo" aria-hidden="true">${player.name.slice(0, 1)}</span></td><td><b class="table-number">${player.number}</b></td><td><button class="record-player-button" type="button"><span><strong>${player.name}</strong><small>${player.role}</small></span></button></td><td>${player.position}</td>${columns.map(column => `<td>${column ? record[column] : ""}</td>`).join("")}</tr>`;
   }).join("");
   const select = document.querySelector("#rosterPlayerSelect");
@@ -406,7 +423,7 @@ function renderPlayerAnalysis(teamKey, playerIndex) {
   selectedRosterPlayerIndex = playerIndex;
   document.querySelectorAll("[data-player-row]").forEach(row => row.classList.toggle("active", Number(row.dataset.playerRow) === playerIndex));
   document.querySelector("#rosterPlayerSelect").value = String(playerIndex);
-  const record = rosterRecordMode === "hitting" ? hittingRecord(player, playerIndex) : pitchingRecord(player, rosters[teamKey].players.filter(item => item.pitcher).indexOf(player));
+  const record = rosterRecordMode === "hitting" ? (linkedHittingRecord(teamKey, player) || hittingRecord(player, playerIndex)) : pitchingRecord(player, rosters[teamKey].players.filter(item => item.pitcher).indexOf(player));
   const detailedColumns = rosterRecordMode === "hitting" ? ["G", "PA", "AB", "H", "2B", "3B", "HR", "RBI", "R", "BB", "SB", "AVG"] : ["G", "GS", "IP", "W", "L", "SV", "H", "BB", "K", "ERA", "WHIP"];
   document.querySelector("#detailPlayerTitle").textContent = `${player.name} ${rosterRecordMode === "hitting" ? "타자" : "투수"} 기록`;
   document.querySelector("#detailNumber").textContent = player.number;
@@ -515,6 +532,7 @@ function renderCalendarGame(teamKey, leagueId) {
 
 const liveStoreKey = "bbat-box-live-game-v1";
 let selectedLiveInning = null;
+let resumeLiveDetail = false;
 const getLiveState = () => { try { return JSON.parse(localStorage.getItem(liveStoreKey) || "null"); } catch (_) { return null; } };
 const livePitchLabel = code => ({ B: "볼", C: "지켜본 스트라이크", S: "헛스윙", F: "파울", X: "타격", H: "사구" }[code] || "투구");
 const liveDots = (count, total, tone = "") => Array.from({ length: total }, (_, index) => `<i class="${tone} ${index < count ? "on" : ""}"></i>`).join("");
@@ -539,8 +557,8 @@ function renderLiveStadium(state) {
     <section class="live-inning-browser" aria-label="이닝별 기록"><div class="inning-browser-head"><div><strong>${selectedLiveInning}회 기록</strong><span>${selectedLiveInning === maxInning ? "현재 이닝" : "지난 이닝 다시보기"}</span></div><div class="inning-score-snapshot">${liveSafe(state.ourTeam)} ${selectedHistory.score?.our || 0} : ${selectedHistory.score?.opp || 0} ${liveSafe(state.opponent)}</div></div><div class="inning-selector">${inningButtons}</div><div class="inning-recap">${halfRecap(`${selectedLiveInning}회초`, selectedHistory.top || {}, state.inning === selectedLiveInning && state.half === "top")}${halfRecap(`${selectedLiveInning}회말`, selectedHistory.bottom || {}, state.inning === selectedLiveInning && state.half === "bottom")}</div></section>
     <div class="live-strip"><span>${liveSafe(state.leagueName || "리그 경기")}</span><b>${liveSafe(state.inningLabel)}</b><span>${liveSafe(state.date || "오늘")}</span></div>
     <div class="field-and-info"><div class="ball-field premium-field" aria-label="현재 수비와 주자 위치"><div class="stadium-lights left"></div><div class="stadium-lights right"></div><div class="outfield-ring"></div><div class="grass-band band-one"></div><div class="grass-band band-two"></div><div class="foul-line foul-left"></div><div class="foul-line foul-right"></div><div class="infield-diamond"></div><div class="mound"></div><div class="home-plate"></div><div class="base first ${state.bases?.[0] ? "is-on" : ""}"></div><div class="base second ${state.bases?.[1] ? "is-on" : ""}"></div><div class="base third ${state.bases?.[2] ? "is-on" : ""}"></div>${fielders}${state.currentBase ? `<div class="runner runner-base-${state.currentBase}"><b>R</b><span>${liveSafe(state.batter.name)}</span></div>` : ""}<span class="field-status">${liveSafe(state.battingTeam)} 공격 · ${state.currentBase ? `${state.currentBase}루 주자` : "주자 없음"}</span></div>
-    <div class="live-info"><article class="match-person batter"><p>현재 타자 · ${state.batter.paIndex}번째 타석</p><div><span class="player-token">${liveSafe(state.batter.number)}</span><div><strong>${liveSafe(state.batter.name)}</strong><small>${liveSafe(state.batter.position || "타자")}${state.batter.result ? ` · ${liveSafe(state.batter.result)}` : ""}</small></div><b>${state.strikes}S</b></div></article><article class="match-person pitcher"><p>현재 투수</p><div><span class="player-token">P</span><div><strong>${liveSafe(state.pitcher.name)}</strong><small>${state.pitcher.ip || 0}이닝 · ${state.pitcher.h || 0}피안타</small></div><b>${state.pitcher.pitches || 0}구</b></div></article><div class="live-count"><span>B ${liveDots(state.balls,3)}</span><span>S ${liveDots(state.strikes,2,"yellow")}</span><span>O ${liveDots(state.outs,2,"red")}</span></div><section class="on-deck-board"><div><strong>다음 대기타석</strong><span>최대 2명</span></div><ol>${onDeck.length ? onDeck.map((player, index) => `<li><b>${index + 1}</b><span>${liveSafe(player.number)}</span><strong>${liveSafe(player.name)}</strong><small>${liveSafe(player.position || "타자")}</small></li>`).join("") : "<li class=\"empty\">대기 타자 정보가 없습니다.</li>"}</ol></section><div class="play-feed"><span>최근 투구</span><ol>${feed.length ? feed.map(item => `<li><b>${item.number}구</b>${livePitchLabel(item.pitch)}</li>`).join("") : "<li>아직 입력된 투구가 없습니다.</li>"}</ol></div><div class="live-sync-note"><i></i><span>기록지와 실시간 동기화 중</span></div></div></div>`;
-  stadium.querySelector("#closeLiveDetail").addEventListener("click", closeLiveDetail);
+    <div class="live-info"><article class="match-person batter"><p>현재 타자 · ${state.batter.paIndex}번째 타석</p><div><span class="player-token">${liveSafe(state.batter.number)}</span><div><strong>${liveSafe(state.batter.name)}</strong><small>${liveSafe(state.batter.position || "타자")}${state.batter.result ? ` · ${liveSafe(state.batter.result)}` : ""}</small></div><b>${state.strikes}S</b></div></article><article class="match-person pitcher"><p>현재 투수</p><div><span class="player-token">P</span><div><strong>${liveSafe(state.pitcher.name)}</strong><small>현재 타석 ${state.pitcher.atBatPitches || 0}구 · ${state.pitcher.ip || 0}이닝 · ${state.pitcher.h || 0}피안타</small></div><b>총 ${state.pitcher.pitches || 0}구</b></div></article><div class="live-count"><span>B ${liveDots(state.balls,3)}</span><span>S ${liveDots(state.strikes,2,"yellow")}</span><span>O ${liveDots(state.outs,2,"red")}</span></div><section class="on-deck-board"><div><strong>다음 대기타석</strong><span>최대 2명</span></div><ol>${onDeck.length ? onDeck.map((player, index) => `<li><b>${index + 1}</b><span>${liveSafe(player.number)}</span><strong>${liveSafe(player.name)}</strong><small>${liveSafe(player.position || "타자")}</small></li>`).join("") : "<li class=\"empty\">대기 타자 정보가 없습니다.</li>"}</ol></section><div class="play-feed"><span>최근 투구</span><ol>${feed.length ? feed.map(item => `<li><b>${item.number}구</b>${livePitchLabel(item.pitch)}</li>`).join("") : "<li>아직 입력된 투구가 없습니다.</li>"}</ol></div><div class="live-sync-note"><i></i><span>기록지와 실시간 동기화 중</span></div></div></div>`;
+  stadium.querySelector("#closeLiveDetail").addEventListener("click", () => closeLiveDetail(false));
   stadium.querySelector("#openScorebook").addEventListener("click", () => window.BBATScorebook?.openRecord(state.recordId));
   stadium.querySelectorAll("[data-live-inning]").forEach(button => button.addEventListener("click", () => { selectedLiveInning = Number(button.dataset.liveInning); renderLiveStadium(state); }));
 }
@@ -548,21 +566,22 @@ function openLiveDetail() {
   const state = getLiveState();
   if (!state?.live) return showToast("현재 진행 중인 LIVE 경기가 없습니다.");
   selectedLiveInning = Number(state.inning) || 1;
+  resumeLiveDetail = true;
   renderLiveStadium(state);
   document.querySelector("#liveGameList").hidden = true;
   document.querySelector("#liveStadium").hidden = false;
   document.querySelector("#liveStadium").scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
-function closeLiveDetail() {
+function closeLiveDetail(preserveResume = false) {
   const stadium = document.querySelector("#liveStadium");
   const list = document.querySelector("#liveGameList");
-  if (stadium && list) { stadium.hidden = true; list.hidden = false; selectedLiveInning = null; }
+  if (stadium && list) { stadium.hidden = true; list.hidden = false; if (!preserveResume) { selectedLiveInning = null; resumeLiveDetail = false; } }
 }
 
 function renderLiveTab(tab) {
   const list = document.querySelector("#liveGameList");
-  closeLiveDetail();
+  closeLiveDetail(true);
   if (tab === "playing") {
     const state = getLiveState();
     list.innerHTML = state?.live ? `<button class="live-game-card" type="button" data-open-live="main"><span class="live-now"><i></i>LIVE · 기록 동기화 중</span><div class="live-teams"><div><span class="small-crest home">B</span><strong>${state.ourTeam}</strong><b>${state.ourRuns}</b></div><div class="inning"><strong>${state.inningLabel}</strong><small>${state.outs}사 · ${state.currentBase ? `주자 ${state.currentBase}루` : "주자 없음"}</small></div><div><span class="small-crest away">A</span><strong>${state.opponent}</strong><b>${state.oppRuns}</b></div></div><span class="watch-live">고화질 상황판 보기</span></button>` : `<div class="live-empty"><span class="live-empty-icon">◇</span><strong>현재 진행 중인 LIVE 경기가 없어요.</strong><p>리그 경기 기록 상단의 LIVE 버튼을 누르면 상황판 방이 바로 열립니다.</p></div>`;
@@ -708,7 +727,14 @@ document.addEventListener("click", event => {
   const nav = event.target.closest("[data-nav]");
   const go = event.target.closest("[data-go]");
   const playerButton = event.target.closest("[data-player-index]");
-  if (nav) showScreen(nav.dataset.nav);
+  if (nav) {
+    const destination = nav.dataset.nav;
+    if (destination === "league" && window.BBATScorebook?.hasActiveDraft?.()) window.BBATScorebook.resumeRecord();
+    else {
+      showScreen(destination);
+      if (destination === "live" && resumeLiveDetail && getLiveState()?.live) openLiveDetail();
+    }
+  }
   if (go) showScreen(go.dataset.go);
   if (playerButton) renderPlayerAnalysis(document.querySelector("#teamPageSelect").value, Number(playerButton.dataset.playerIndex));
   if (event.target.closest("[data-open-live]")) openLiveDetail();
@@ -897,13 +923,21 @@ document.querySelectorAll("[data-live-tab]").forEach(button => button.addEventLi
   renderLiveTab(button.dataset.liveTab);
 }));
 
-document.querySelector("#closeLiveDetail").addEventListener("click", closeLiveDetail);
+document.querySelector("#closeLiveDetail").addEventListener("click", () => closeLiveDetail(false));
 document.querySelector("#openScorebook").addEventListener("click", () => { const state = getLiveState(); if (state?.recordId) window.BBATScorebook?.openRecord(state.recordId); });
 window.addEventListener("bbat-live-update", event => {
   const liveScreen = document.querySelector("#screen-live");
   if (!liveScreen.hidden) {
     if (!document.querySelector("#liveStadium").hidden && event.detail?.live) renderLiveStadium(event.detail);
     else renderLiveTab("playing");
+  }
+});
+window.addEventListener("bbat-player-stats-update", () => {
+  const rosterScreen = document.querySelector("#screen-roster");
+  if (rosterScreen && !rosterScreen.hidden) {
+    const teamKey = document.querySelector("#teamPageSelect").value;
+    renderRosterTable(teamKey);
+    renderPlayerAnalysis(teamKey, selectedRosterPlayerIndex);
   }
 });
 window.addEventListener("storage", event => {
