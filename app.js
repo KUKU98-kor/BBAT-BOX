@@ -111,6 +111,7 @@ const positionLabels = {
 };
 let savedProfilePhoto = localStorage.getItem("bbat-box-profile-photo") || "";
 let draftProfilePhoto = savedProfilePhoto;
+let signedInAccount = null;
 
 function applyProfilePhoto(source) {
   document.querySelectorAll(".profile-photo").forEach(frame => {
@@ -290,7 +291,7 @@ function renderSchedulePolls(teamKey, leagueId) {
   document.querySelector("#schedulePollList").innerHTML = games.length ? games.map(game => {
     const attendance = ensureAttendance(teamKey, leagueId, game);
     const attending = Object.values(attendance).filter(status => status === "yes").length;
-    const myStatus = attendance["이도윤"] || "maybe";
+    const myStatus = attendance[currentAccountName()] || "maybe";
     const days = daysUntilGame(game);
     const closed = days <= 7;
     const timing = closed ? "투표 마감" : `${days - 7}일 후 마감`;
@@ -334,6 +335,7 @@ function renderTeamPage(key, requestedLeagueId) {
   document.querySelector("#teamMyNumber").textContent = team.number;
   document.querySelector("#teamName").textContent = team.name;
   document.querySelector("#teamMeta").textContent = team.teamMeta.split(" · ").slice(0, 2).join(" · ");
+  document.querySelector("#teamHostBadge").hidden = !(key === "bbat" && signedInAccount?.teamRoles?.bbat === "host");
   document.querySelector("#teamLeagueLabel").textContent = league.name;
   document.querySelector("#teamSeasonLabel").textContent = league.season;
   document.querySelector("#teamWins").textContent = league.record;
@@ -766,7 +768,7 @@ document.querySelector("#schedulePollList").addEventListener("click", event => {
   const leagueId = document.querySelector("#teamLeagueSelect").value;
   const game = getLeagueGames(teamKey, leagueId).find(item => item.date === button.dataset.gameDate);
   if (!game) return;
-  ensureAttendance(teamKey, leagueId, game)["이도윤"] = button.dataset.attendance;
+  ensureAttendance(teamKey, leagueId, game)[currentAccountName()] = button.dataset.attendance;
   localStorage.setItem("bbat-box-attendance", JSON.stringify(attendanceState));
   renderSchedulePolls(teamKey, leagueId);
   renderLineupStatus(teamKey, leagueId);
@@ -848,7 +850,7 @@ document.querySelector("#profileTeamSelect").addEventListener("change", event =>
 document.querySelector("#profileForm").addEventListener("submit", event => {
   event.preventDefault();
   const key = document.querySelector("#profileTeamSelect").value;
-  const name = document.querySelector("#profileNameInput").value.trim() || "이도윤";
+  const name = document.querySelector("#profileNameInput").value.trim() || currentAccountName();
   const number = document.querySelector("#profileNumberInput").value.trim() || teams[key].number;
   const position = document.querySelector("#profilePositionInput").value;
   const throws = document.querySelector("#throwHandInput").value;
@@ -859,9 +861,7 @@ document.querySelector("#profileForm").addEventListener("submit", event => {
   teams[key].header = `${teams[key].name} · ${positionLabels[position] || position}`;
   savedProfilePhoto = draftProfilePhoto;
   try { localStorage.setItem("bbat-box-profile-photo", savedProfilePhoto); } catch (_) { showToast("사진은 적용됐지만 이 기기에는 저장하지 못했습니다."); }
-  document.querySelector("#profileDisplayName").textContent = name;
-  document.querySelector(".mini-profile-copy strong").textContent = name;
-  document.querySelector(".photo-editor-card h2").textContent = name;
+  updateSignedInAccount({ name });
   renderHomeTeam(key);
   showScreen("home");
   showToast("프로필 변경사항을 저장했습니다.");
@@ -958,6 +958,10 @@ function closeSettings() { settingsSheet.hidden = true; modalBackdrop.hidden = t
 document.querySelector("#settingsButton").addEventListener("click", openSettings);
 document.querySelector("#closeSettings").addEventListener("click", closeSettings);
 modalBackdrop.addEventListener("click", closeSettings);
+document.querySelector("#logoutButton").addEventListener("click", () => {
+  closeSettings();
+  lockApp();
+});
 document.addEventListener("keydown", event => {
   if (event.key !== "Escape") return;
   if (!settingsSheet.hidden) closeSettings();
@@ -984,3 +988,212 @@ applyProfilePhoto(savedProfilePhoto);
 renderHomeTeam("bbat");
 renderTeamPage("bbat", "seoul-sunday");
 renderLeagueRosterSync("bbat");
+const authStoreKey = "bbat-box-local-accounts-v1";
+const authSessionKey = "bbat-box-local-session-v1";
+const bbatHostAccountKey = "bbat-box-bbat-host-account-v1";
+const authGate = document.querySelector("#authGate");
+const loginForm = document.querySelector("#loginForm");
+const signupForm = document.querySelector("#signupForm");
+const authSwitch = document.querySelector("#authSwitch");
+let signupIdVerified = "";
+
+function readLocalAccounts() {
+  try { return JSON.parse(localStorage.getItem(authStoreKey)) || []; }
+  catch (_) { return []; }
+}
+
+function normalizeUsername(value) { return value.trim().toLowerCase(); }
+function bytesToBase64(bytes) { return btoa(String.fromCharCode(...new Uint8Array(bytes))); }
+function currentAccountName() { return signedInAccount?.name || "이도윤"; }
+
+function persistAccount(account) {
+  const accounts = readLocalAccounts();
+  const index = accounts.findIndex(item => item.username === account.username);
+  if (index >= 0) accounts[index] = account;
+  else accounts.push(account);
+  localStorage.setItem(authStoreKey, JSON.stringify(accounts));
+}
+
+function ensureBbatHost(account) {
+  let hostUsername = localStorage.getItem(bbatHostAccountKey);
+  if (!hostUsername) {
+    hostUsername = account.username;
+    localStorage.setItem(bbatHostAccountKey, hostUsername);
+  }
+  if (hostUsername === account.username && account.teamRoles?.bbat !== "host") {
+    account.teamRoles = { ...(account.teamRoles || {}), bbat: "host" };
+    account.teams = [...new Set([...(account.teams || []), "bbat"])];
+    account.hostGrantedAt = new Date().toISOString();
+    persistAccount(account);
+  }
+  return account;
+}
+
+function migratePlayerIdentity(previousName, nextName) {
+  if (!nextName || previousName === nextName) return;
+  Object.values(rosters).forEach(roster => roster.players.forEach(player => {
+    if (player.name === previousName || player.name === "이도윤") player.name = nextName;
+  }));
+  Object.values(attendanceState).forEach(attendance => {
+    if (Object.prototype.hasOwnProperty.call(attendance, previousName)) {
+      attendance[nextName] = attendance[previousName];
+      if (previousName !== nextName) delete attendance[previousName];
+    } else if (Object.prototype.hasOwnProperty.call(attendance, "이도윤")) {
+      attendance[nextName] = attendance["이도윤"];
+      if (nextName !== "이도윤") delete attendance["이도윤"];
+    }
+  });
+  localStorage.setItem("bbat-box-attendance", JSON.stringify(attendanceState));
+}
+
+function updateSignedInAccount(changes) {
+  if (!signedInAccount) return;
+  const previousName = signedInAccount.name;
+  signedInAccount = { ...signedInAccount, ...changes };
+  persistAccount(signedInAccount);
+  migratePlayerIdentity(previousName, signedInAccount.name);
+  applySignedInUser(signedInAccount);
+}
+
+async function derivePassword(password, saltBase64) {
+  const encoder = new TextEncoder();
+  const salt = saltBase64 ? Uint8Array.from(atob(saltBase64), char => char.charCodeAt(0)) : crypto.getRandomValues(new Uint8Array(16));
+  const material = await crypto.subtle.importKey("raw", encoder.encode(password), "PBKDF2", false, ["deriveBits"]);
+  const hash = await crypto.subtle.deriveBits({ name: "PBKDF2", salt, iterations: 120000, hash: "SHA-256" }, material, 256);
+  return { salt: bytesToBase64(salt), hash: bytesToBase64(hash) };
+}
+
+function setAuthMode(mode) {
+  const joining = mode === "signup";
+  loginForm.hidden = joining;
+  signupForm.hidden = !joining;
+  document.querySelector("#authKicker").textContent = joining ? "BBAT BOX 시작하기" : "다시 오신 것을 환영합니다";
+  document.querySelector("#authTitle").textContent = joining ? "회원가입" : "로그인";
+  document.querySelector("#authDescription").textContent = joining ? "간단한 계정을 만들고 팀 초대를 받아보세요." : "내 계정으로 기록과 팀을 이어서 확인하세요.";
+  authSwitch.innerHTML = joining ? "이미 계정이 있으신가요? <b>로그인</b>" : "회원이 아니신가요? <b>회원가입</b>";
+  authSwitch.dataset.mode = joining ? "signup" : "login";
+  document.querySelector(joining ? "#signupName" : "#loginId").focus();
+}
+
+function applySignedInUser(account) {
+  if (!account) return;
+  const previousName = signedInAccount?.name || "이도윤";
+  signedInAccount = account;
+  migratePlayerIdentity(previousName, account.name);
+  const host = account.teamRoles?.bbat === "host";
+  document.querySelector(".mini-profile-copy strong").textContent = account.name;
+  document.querySelector("#profileDisplayName").textContent = account.name;
+  document.querySelector("#profileNameInput").value = account.name;
+  document.querySelector("#profileNickname").textContent = account.nickname;
+  document.querySelector("#editorIdentityName").textContent = `${account.nickname} (${account.name})`;
+  document.querySelector("#settingsAccountName").textContent = `${account.nickname} (${account.name})`;
+  document.querySelector("#settingsAccountMeta").textContent = `${account.username} · ${host ? "배트조짐 호스트" : "선수"}`;
+  renderHomeTeam(document.querySelector("#homeTeamSelect").value);
+  renderTeamPage(document.querySelector("#teamPageSelect").value, document.querySelector("#teamLeagueSelect").value);
+  renderLeagueRosterSync(document.querySelector("#leagueRosterTeamSelect").value);
+}
+
+function unlockApp(account) {
+  ensureBbatHost(account);
+  localStorage.setItem(authSessionKey, account.username);
+  applySignedInUser(account);
+  authGate.hidden = true;
+  document.body.classList.remove("auth-locked");
+}
+
+function lockApp() {
+  localStorage.removeItem(authSessionKey);
+  authGate.hidden = false;
+  document.body.classList.add("auth-locked");
+  setAuthMode("login");
+}
+
+authSwitch.addEventListener("click", () => setAuthMode(authSwitch.dataset.mode === "signup" ? "login" : "signup"));
+
+document.querySelectorAll("[data-password-toggle]").forEach(button => button.addEventListener("click", () => {
+  const input = document.querySelector(`#${button.dataset.passwordToggle}`);
+  const showing = input.type === "text";
+  input.type = showing ? "password" : "text";
+  button.textContent = showing ? "보기" : "숨기기";
+  button.setAttribute("aria-label", showing ? "비밀번호 보기" : "비밀번호 숨기기");
+}));
+
+document.querySelector("#signupId").addEventListener("input", event => {
+  signupIdVerified = "";
+  document.querySelector("#idCheckMessage").textContent = event.target.validity.patternMismatch ? "영문, 숫자, 밑줄만 사용할 수 있어요." : "중복 확인을 눌러주세요.";
+  document.querySelector("#idCheckMessage").className = "id-check-message";
+});
+
+function validatePasswordConfirmation() {
+  const password = document.querySelector("#signupPassword");
+  const confirmation = document.querySelector("#signupPasswordConfirm");
+  confirmation.setCustomValidity(password.value === confirmation.value ? "" : "비밀번호가 일치하지 않습니다.");
+}
+document.querySelector("#signupPassword").addEventListener("input", validatePasswordConfirmation);
+document.querySelector("#signupPasswordConfirm").addEventListener("input", validatePasswordConfirmation);
+
+document.querySelector("#checkUsernameButton").addEventListener("click", () => {
+  const input = document.querySelector("#signupId");
+  const username = normalizeUsername(input.value);
+  const message = document.querySelector("#idCheckMessage");
+  if (!input.checkValidity()) {
+    message.textContent = "아이디는 영문과 숫자로 3자리 이상 입력해주세요.";
+    message.className = "id-check-message error";
+    input.reportValidity();
+    return;
+  }
+  if (readLocalAccounts().some(account => account.username === username)) {
+    signupIdVerified = "";
+    message.textContent = "이미 사용 중인 아이디예요.";
+    message.className = "id-check-message error";
+    return;
+  }
+  signupIdVerified = username;
+  message.textContent = "사용할 수 있는 아이디예요.";
+  message.className = "id-check-message success";
+});
+
+signupForm.addEventListener("submit", async event => {
+  event.preventDefault();
+  validatePasswordConfirmation();
+  if (!signupForm.reportValidity()) return;
+  const username = normalizeUsername(document.querySelector("#signupId").value);
+  const message = document.querySelector("#signupMessage");
+  if (signupIdVerified !== username) { message.textContent = "아이디 중복 확인을 먼저 해주세요."; return; }
+  const submit = signupForm.querySelector("[type=submit]");
+  submit.disabled = true;
+  submit.textContent = "계정 만드는 중";
+  try {
+    const credential = await derivePassword(document.querySelector("#signupPassword").value);
+    const account = { id: crypto.randomUUID?.() || `${Date.now()}-${Math.random()}`, username, name: document.querySelector("#signupName").value.trim(), nickname: document.querySelector("#signupNickname").value.trim(), ...credential, createdAt: new Date().toISOString() };
+    const accounts = readLocalAccounts();
+    if (accounts.some(item => item.username === username)) throw new Error("duplicate");
+    accounts.push(account);
+    localStorage.setItem(authStoreKey, JSON.stringify(accounts));
+    signupForm.reset();
+    signupIdVerified = "";
+    unlockApp(account);
+  } catch (_) {
+    message.textContent = "계정을 만들지 못했습니다. 다시 시도해주세요.";
+  } finally {
+    submit.disabled = false;
+    submit.textContent = "계정 만들기";
+  }
+});
+
+loginForm.addEventListener("submit", async event => {
+  event.preventDefault();
+  const username = normalizeUsername(document.querySelector("#loginId").value);
+  const message = document.querySelector("#loginMessage");
+  const account = readLocalAccounts().find(item => item.username === username);
+  if (!account) { message.textContent = "아이디 또는 비밀번호를 확인해주세요."; return; }
+  const credential = await derivePassword(document.querySelector("#loginPassword").value, account.salt);
+  if (credential.hash !== account.hash) { message.textContent = "아이디 또는 비밀번호를 확인해주세요."; return; }
+  message.textContent = "";
+  loginForm.reset();
+  unlockApp(account);
+});
+
+const initialUsername = localStorage.getItem(authSessionKey);
+const initialAccount = readLocalAccounts().find(account => account.username === initialUsername);
+if (initialAccount) unlockApp(initialAccount);

@@ -8,9 +8,47 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="styles.css?v=5" />
+    <link rel="stylesheet" href="styles.css?v=7" />
   </head>
-  <body>
+  <body class="auth-locked">
+    <section class="auth-gate" id="authGate" aria-labelledby="authTitle">
+      <div class="auth-shell">
+        <div class="auth-brand-panel" aria-hidden="true">
+          <div class="auth-brand-mark"><img src="assets/bbat-box-logo.png" alt="" /><span>BBAT BOX</span></div>
+          <div class="auth-brand-copy"><p>MY BASEBALL, MY BOX</p><h1>우리 팀의 모든 경기를<br />한곳에 쌓아갑니다.</h1><span>기록 · 일정 · 라인업 · LIVE</span></div>
+          <div class="auth-score-line"><span>TEAM</span><i></i><b>01</b><i></i><span>SEASON</span></div>
+        </div>
+        <div class="auth-form-panel">
+          <div class="auth-mobile-brand"><img src="assets/bbat-box-logo.png" alt="" /><strong>BBAT BOX</strong></div>
+          <div class="auth-heading"><span id="authKicker">다시 오신 것을 환영합니다</span><h2 id="authTitle">로그인</h2><p id="authDescription">내 계정으로 기록과 팀을 이어서 확인하세요.</p></div>
+          <form class="auth-form" id="loginForm">
+            <label for="loginId">아이디</label>
+            <input id="loginId" name="username" autocomplete="username" minlength="3" required placeholder="아이디 입력" />
+            <label for="loginPassword">비밀번호</label>
+            <div class="password-field"><input id="loginPassword" name="password" type="password" autocomplete="current-password" minlength="5" required placeholder="5자리 이상" /><button type="button" data-password-toggle="loginPassword" aria-label="비밀번호 보기">보기</button></div>
+            <p class="auth-message" id="loginMessage" role="alert"></p>
+            <button class="auth-submit" type="submit">로그인</button>
+          </form>
+          <form class="auth-form" id="signupForm" hidden>
+            <label for="signupName">이름</label>
+            <input id="signupName" autocomplete="name" maxlength="20" required placeholder="실제 이름" />
+            <label for="signupId">아이디</label>
+            <div class="username-field"><input id="signupId" autocomplete="username" minlength="3" maxlength="20" pattern="[A-Za-z0-9_]+" required placeholder="영문·숫자 3자리 이상" /><button id="checkUsernameButton" type="button">중복 확인</button></div>
+            <p class="id-check-message" id="idCheckMessage" aria-live="polite">영문, 숫자, 밑줄만 사용할 수 있어요.</p>
+            <label for="signupPassword">비밀번호</label>
+            <div class="password-field"><input id="signupPassword" type="password" autocomplete="new-password" minlength="5" required placeholder="5자리 이상" /><button type="button" data-password-toggle="signupPassword" aria-label="비밀번호 보기">보기</button></div>
+            <label for="signupPasswordConfirm">비밀번호 확인</label>
+            <div class="password-field"><input id="signupPasswordConfirm" type="password" autocomplete="new-password" minlength="5" required placeholder="비밀번호 다시 입력" /><button type="button" data-password-toggle="signupPasswordConfirm" aria-label="비밀번호 확인 보기">보기</button></div>
+            <label for="signupNickname">닉네임</label>
+            <input id="signupNickname" maxlength="16" required placeholder="팀원에게 보일 이름" />
+            <p class="auth-message" id="signupMessage" role="alert"></p>
+            <button class="auth-submit" type="submit">계정 만들기</button>
+          </form>
+          <button class="auth-switch" id="authSwitch" type="button">회원이 아니신가요? <b>회원가입</b></button>
+          <small class="auth-demo-note">현재 테스트 버전에서는 이 기기에 계정이 저장됩니다.</small>
+        </div>
+      </div>
+    </section>
     <a class="skip-link" href="#appMain">본문으로 건너뛰기</a>
     <header class="app-header">
       <button class="wordmark" type="button" data-go="home" aria-label="BBAT BOX 홈"><img class="brand-logo" src="assets/bbat-box-logo.png" alt="" /><span>BBAT BOX</span></button>
@@ -30,7 +68,7 @@
             </article>
             <article class="player-card" aria-label="내 프로필">
               <div class="player-card-top"><span>내 프로필</span></div>
-              <div class="player-identity"><div class="profile-photo" aria-hidden="true"><img class="profile-photo-image" alt="" /><svg viewBox="0 0 80 96"><circle cx="40" cy="30" r="17"/><path d="M13 90c2-24 10-37 27-37s25 13 27 37"/><path d="M20 65c12 8 28 8 40 0"/></svg><span>PROFILE</span></div><div><p>PLAYER</p><div class="profile-name-line"><h2 id="profileDisplayName">이도윤</h2><strong id="profileNumber">N.23</strong></div><div class="position-row"><span id="profilePosition">CF</span><span id="profileBats">우투우타</span></div></div></div>
+              <div class="player-identity"><div class="profile-photo" aria-hidden="true"><img class="profile-photo-image" alt="" /><svg viewBox="0 0 80 96"><circle cx="40" cy="30" r="17"/><path d="M13 90c2-24 10-37 27-37s25 13 27 37"/><path d="M20 65c12 8 28 8 40 0"/></svg><span>PROFILE</span></div><div><p>PLAYER</p><div class="profile-name-line"><h2 id="profileDisplayName">이도윤</h2><strong id="profileNumber">N.23</strong></div><span class="profile-nickname" id="profileNickname">닉네임</span><div class="position-row"><span id="profilePosition">CF</span><span id="profileBats">우투우타</span></div></div></div>
               <dl class="profile-details"><div><dt>소속</dt><dd id="profileTeamShort">배트조짐</dd></div><div><dt>가입일</dt><dd>2024.03</dd></div><div><dt>출전</dt><dd id="profileGames">18경기</dd></div></dl>
               <button class="profile-card-hit" id="openProfileEditor" type="button" aria-label="내 프로필 수정하기"></button>
             </article>
@@ -45,7 +83,7 @@
       <section class="app-screen profile-editor-screen" id="screen-profile" data-screen="profile" aria-labelledby="profileEditorTitle" hidden>
         <div class="profile-editor-head"><button class="back-button-light" id="profileBackButton" type="button">‹ MY BOX</button><div><p class="date-line">내 프로필</p><h1 id="profileEditorTitle">프로필 수정</h1></div></div>
         <div class="profile-editor-layout">
-          <section class="photo-editor-card"><div class="profile-photo large"><img class="profile-photo-image" alt="" /><svg viewBox="0 0 80 96"><circle cx="40" cy="30" r="17"/><path d="M13 90c2-24 10-37 27-37s25 13 27 37"/><path d="M20 65c12 8 28 8 40 0"/></svg><span>PROFILE</span></div><h2>이도윤</h2><p id="editorTeamCaption">배트조짐 · N.23</p><input id="profilePhotoInput" type="file" accept="image/jpeg,image/png,image/webp" hidden /><button class="outline-action" type="button" id="changePhotoButton">사진 변경</button><small class="photo-help">JPG · PNG · WEBP / 아치형으로 자동 맞춤</small></section>
+          <section class="photo-editor-card"><div class="profile-photo large"><img class="profile-photo-image" alt="" /><svg viewBox="0 0 80 96"><circle cx="40" cy="30" r="17"/><path d="M13 90c2-24 10-37 27-37s25 13 27 37"/><path d="M20 65c12 8 28 8 40 0"/></svg><span>PROFILE</span></div><h2 id="editorIdentityName">이도윤</h2><p id="editorTeamCaption">배트조짐 · N.23</p><input id="profilePhotoInput" type="file" accept="image/jpeg,image/png,image/webp" hidden /><button class="outline-action" type="button" id="changePhotoButton">사진 변경</button><small class="photo-help">JPG · PNG · WEBP / 아치형으로 자동 맞춤</small></section>
           <form class="profile-form" id="profileForm">
             <div class="section-head"><div><p>선수 정보</p><h2>기본 프로필</h2></div><span class="role-badge edit">본인만 수정</span></div>
             <div class="form-grid"><label>이름<input id="profileNameInput" value="이도윤" /></label><label>팀<select id="profileTeamSelect"><option value="bbat">배트조짐</option><option value="braves">브레이브스</option><option value="solo">개인 기록</option></select></label><label>등번호<input id="profileNumberInput" inputmode="numeric" value="23" maxlength="3" /></label><label>주 포지션<select id="profilePositionInput"><option>CF</option><option>P</option><option>SS</option><option>2B</option><option>C</option><option>OF</option></select></label><label>투구<select id="throwHandInput"><option>우투</option><option>좌투</option></select></label><label>타격<select id="batHandInput"><option>우타</option><option>좌타</option><option>양타</option></select></label></div>
@@ -67,7 +105,7 @@
 
       <section class="app-screen" id="screen-team" data-screen="team" aria-labelledby="teamTitle" hidden>
         <div class="page-intro compact"><div><p class="date-line">팀 관리</p><h1 id="teamTitle">팀과 리그를 한눈에</h1></div><div class="team-filter-panel"><label class="team-select-wrap">팀 선택<select id="teamPageSelect" aria-label="관리할 팀 선택"><option value="bbat">배트조짐</option><option value="braves">브레이브스</option></select></label><label class="team-select-wrap">리그 선택<select id="teamLeagueSelect" aria-label="확인할 리그 선택"></select></label></div></div>
-        <section class="team-banner"><div class="team-crest" id="teamPageCrest">B<span id="teamMyNumber">23</span></div><div class="team-title"><span id="teamLeagueLabel">서울 일요리그</span><h2 id="teamName">배트조짐</h2><p id="teamMeta">2021년 창단 · 선수 24명</p></div><div class="team-record"><span id="teamSeasonLabel">2026 시즌</span><strong id="teamWins">12승 1무 5패</strong><small id="teamRank">A조 3위</small></div></section>
+        <section class="team-banner"><div class="team-crest" id="teamPageCrest">B<span id="teamMyNumber">23</span></div><div class="team-title"><span id="teamLeagueLabel">서울 일요리그</span><h2 id="teamName">배트조짐</h2><p id="teamMeta">2021년 창단 · 선수 24명</p><b class="host-badge" id="teamHostBadge" hidden>HOST · 내 팀</b></div><div class="team-record"><span id="teamSeasonLabel">2026 시즌</span><strong id="teamWins">12승 1무 5패</strong><small id="teamRank">A조 3위</small></div></section>
         <div class="team-grid"><section class="roster-strip roster-preview"><div class="section-head"><div><p>등록 선수 미리보기</p><h2 id="rosterPreviewTitle">배트조짐 선수명단</h2></div><button class="text-button" id="openRosterManagement" type="button">선수단 보기</button></div><div class="staff-preview" id="teamStaffPreview"></div><div class="roster-preview-list" id="teamRosterPreview"></div></section><section class="next-game"><div class="section-head"><div><p id="nextGameLeague">서울 일요리그 · 다음 경기</p><h2 id="nextGameDate">9월 21일 · 일요일</h2></div><button class="schedule-sync" id="openTeamScheduleEditor" type="button">+ 일정 등록</button></div><div class="matchup" id="nextGameMatchup"><div><span class="small-crest home" id="nextGameHomeCrest">B</span><strong id="nextGameTeam">배트조짐</strong></div><span><b id="nextGameTime">09:00</b><small id="nextGameVenue">목동야구장 2구장</small></span><div><span class="small-crest away" id="nextGameAwayCrest">W</span><strong id="nextGameOpponent">웨일즈</strong></div></div><div class="next-game-actions lineup-direct-actions"><button class="primary-action" id="openLineupBuilder" type="button">라인업</button><button class="outline-action" type="button" data-go="calendar">전체 일정</button></div><p class="lineup-status" id="lineupStatus">다가오는 경기의 참가 응답을 바탕으로 라인업을 구성합니다.</p><div class="schedule-votes"><div class="schedule-votes-head"><strong>참가 투표</strong><span>경기 7일 전 자동 마감</span></div><div id="schedulePollList"></div></div></section></div>
         <section class="join-team"><div><span class="ticket-icon">#</span><div><strong>새 팀에 참가하기</strong><p>감독이나 팀 리더에게 받은 참가 코드를 입력하세요.</p></div></div><button class="primary-action" id="joinTeamButton" type="button">참가 코드 입력</button></section>
       </section>
@@ -177,8 +215,8 @@
     <div class="modal-backdrop" id="lineupBackdrop" hidden></div>
     <section class="lineup-modal" id="lineupModal" role="dialog" aria-modal="true" aria-labelledby="lineupModalTitle" hidden><header><div><p id="lineupGameLabel">다가오는 경기</p><h2 id="lineupModalTitle">라인업</h2></div><button id="closeLineupModal" type="button" aria-label="라인업 닫기">×</button></header><div class="lineup-participants"><span>참가명단</span><div id="lineupParticipants"></div><div class="manual-participant"><label>마감 후 참가자 추가<select id="manualParticipantSelect" aria-label="관리자가 추가할 참가자"></select></label><button id="addManualParticipant" type="button">참가 등록</button></div></div><form id="lineupForm"><section class="lineup-pitcher"><strong>선발투수</strong><label>선수<select id="lineupPitcherSelect"></select></label></section><section class="lineup-relievers"><div class="reliever-head"><div><strong>구원투수 예정</strong><span>2명부터 최대 4명까지 지정</span></div><button id="addRelieverButton" type="button">+ 구원투수</button></div><div id="lineupRelieverList"></div></section><div class="lineup-section-title"><strong>타순</strong><span>1번부터 9번까지 선수와 실제 수비 위치를 지정하세요.</span></div><div class="lineup-order" id="lineupOrder"></div><section class="lineup-bench"><div class="lineup-section-title"><strong>후보 명단</strong><span>참가자 중 라인업에 포함되지 않은 선수</span></div><div id="lineupBenchList"></div></section><div class="form-actions"><button class="outline-action" id="cancelLineup" type="button">취소</button><button class="primary-action" type="submit">라인업 저장</button></div></form></section>
     <div class="modal-backdrop" id="modalBackdrop" hidden></div>
-    <aside class="settings-sheet" id="settingsSheet" role="dialog" aria-modal="true" aria-labelledby="settingsTitle" hidden><header><div><p>내 계정</p><h2 id="settingsTitle">설정</h2></div><button id="closeSettings" type="button" aria-label="설정 닫기">×</button></header><div class="settings-user"><div class="mini-avatar large"><span>23</span></div><div><strong>이도윤</strong><small>kuku98 · 선수 / 기록원</small></div></div><button class="setting-row" type="button"><span>프로필 수정</span><b>›</b></button><button class="setting-row" type="button"><span>알림 설정</span><b>›</b></button><button class="setting-row" type="button"><span>팀 및 권한</span><b>›</b></button><button class="setting-row" type="button"><span>개인정보 및 보안</span><b>›</b></button></aside>
+    <aside class="settings-sheet" id="settingsSheet" role="dialog" aria-modal="true" aria-labelledby="settingsTitle" hidden><header><div><p>내 계정</p><h2 id="settingsTitle">설정</h2></div><button id="closeSettings" type="button" aria-label="설정 닫기">×</button></header><div class="settings-user"><div class="mini-avatar large"><span>23</span></div><div><strong id="settingsAccountName">이도윤</strong><small id="settingsAccountMeta">kuku98 · 선수 / 기록원</small></div></div><button class="setting-row" type="button"><span>프로필 수정</span><b>›</b></button><button class="setting-row" type="button"><span>알림 설정</span><b>›</b></button><button class="setting-row" type="button"><span>팀 및 권한</span><b>›</b></button><button class="setting-row" type="button"><span>개인정보 및 보안</span><b>›</b></button><button class="setting-row logout-row" id="logoutButton" type="button"><span>로그아웃</span><b>나가기</b></button></aside>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="app.js?v=5"></script><script src="scorebook.js?v=5"></script>
+    <script src="app.js?v=7"></script><script src="scorebook.js?v=5"></script>
   </body>
 </html>
