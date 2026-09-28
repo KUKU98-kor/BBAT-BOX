@@ -112,6 +112,10 @@ const positionLabels = {
 let savedProfilePhoto = localStorage.getItem("bbat-box-profile-photo") || "";
 let draftProfilePhoto = savedProfilePhoto;
 let signedInAccount = null;
+const backendConfig = window.BBAT_SUPABASE || {};
+const supabaseClient = window.supabase?.createClient?.(backendConfig.url, backendConfig.publishableKey, {
+  auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
+});
 
 function applyProfilePhoto(source) {
   document.querySelectorAll(".profile-photo").forEach(frame => {
@@ -885,7 +889,7 @@ document.querySelector("#profileTeamSelect").addEventListener("change", event =>
   document.querySelector("#batHandInput").value = team.bats.slice(2);
   document.querySelector("#editorTeamCaption").textContent = `${team.name} · N.${team.number}`;
 });
-document.querySelector("#profileForm").addEventListener("submit", event => {
+document.querySelector("#profileForm").addEventListener("submit", async event => {
   event.preventDefault();
   const key = document.querySelector("#profileTeamSelect").value;
   const name = document.querySelector("#profileNameInput").value.trim() || currentAccountName();
@@ -899,7 +903,7 @@ document.querySelector("#profileForm").addEventListener("submit", event => {
   teams[key].header = `${teams[key].name} · ${positionLabels[position] || position}`;
   savedProfilePhoto = draftProfilePhoto;
   try { localStorage.setItem("bbat-box-profile-photo", savedProfilePhoto); } catch (_) { showToast("사진은 적용됐지만 이 기기에는 저장하지 못했습니다."); }
-  updateSignedInAccount({ name });
+  await updateSignedInAccount({ name });
   renderHomeTeam(key);
   showScreen("home");
   showToast("프로필 변경사항을 저장했습니다.");
@@ -1014,6 +1018,7 @@ document.addEventListener("keydown", event => {
   if (!scheduleModal.hidden) closeScheduleEditor();
   if (!playerModal.hidden) closePlayerModal();
   if (!lineupModal.hidden) closeLineupBuilder();
+  if (typeof teamAccessModal !== "undefined" && !teamAccessModal.hidden) closeTeamAccess();
 });
 
 const didWell = document.querySelector("#didWell");
@@ -1034,46 +1039,15 @@ applyProfilePhoto(savedProfilePhoto);
 renderHomeTeam("bbat");
 renderTeamPage("bbat", "seoul-sunday");
 renderLeagueRosterSync("bbat");
-const authStoreKey = "bbat-box-local-accounts-v1";
-const authSessionKey = "bbat-box-local-session-v1";
-const bbatHostAccountKey = "bbat-box-bbat-host-account-v1";
 const authGate = document.querySelector("#authGate");
 const loginForm = document.querySelector("#loginForm");
 const signupForm = document.querySelector("#signupForm");
 const authSwitch = document.querySelector("#authSwitch");
 let signupIdVerified = "";
 
-function readLocalAccounts() {
-  try { return JSON.parse(localStorage.getItem(authStoreKey)) || []; }
-  catch (_) { return []; }
-}
-
 function normalizeUsername(value) { return value.trim().toLowerCase(); }
-function bytesToBase64(bytes) { return btoa(String.fromCharCode(...new Uint8Array(bytes))); }
+function escapeMarkup(value) { return String(value ?? "").replace(/[&<>"']/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]); }
 function currentAccountName() { return signedInAccount?.name || "이도윤"; }
-
-function persistAccount(account) {
-  const accounts = readLocalAccounts();
-  const index = accounts.findIndex(item => item.username === account.username);
-  if (index >= 0) accounts[index] = account;
-  else accounts.push(account);
-  localStorage.setItem(authStoreKey, JSON.stringify(accounts));
-}
-
-function ensureBbatHost(account) {
-  let hostUsername = localStorage.getItem(bbatHostAccountKey);
-  if (!hostUsername) {
-    hostUsername = account.username;
-    localStorage.setItem(bbatHostAccountKey, hostUsername);
-  }
-  if (hostUsername === account.username && account.teamRoles?.bbat !== "host") {
-    account.teamRoles = { ...(account.teamRoles || {}), bbat: "host" };
-    account.teams = [...new Set([...(account.teams || []), "bbat"])];
-    account.hostGrantedAt = new Date().toISOString();
-    persistAccount(account);
-  }
-  return account;
-}
 
 function migratePlayerIdentity(previousName, nextName) {
   if (!nextName || previousName === nextName) return;
@@ -1092,21 +1066,22 @@ function migratePlayerIdentity(previousName, nextName) {
   localStorage.setItem("bbat-box-attendance", JSON.stringify(attendanceState));
 }
 
-function updateSignedInAccount(changes) {
+async function updateSignedInAccount(changes) {
   if (!signedInAccount) return;
   const previousName = signedInAccount.name;
-  signedInAccount = { ...signedInAccount, ...changes };
-  persistAccount(signedInAccount);
+  const nextName = changes.name || signedInAccount.name;
+  const nextNickname = changes.nickname || signedInAccount.nickname;
+  const { data, error } = await supabaseClient.rpc("update_my_profile", {
+    p_full_name: nextName,
+    p_nickname: nextNickname,
+  });
+  if (error) {
+    showToast("서버에 프로필을 저장하지 못했습니다.");
+    throw error;
+  }
+  signedInAccount = { ...signedInAccount, ...changes, name: data.full_name, nickname: data.nickname };
   migratePlayerIdentity(previousName, signedInAccount.name);
   applySignedInUser(signedInAccount);
-}
-
-async function derivePassword(password, saltBase64) {
-  const encoder = new TextEncoder();
-  const salt = saltBase64 ? Uint8Array.from(atob(saltBase64), char => char.charCodeAt(0)) : crypto.getRandomValues(new Uint8Array(16));
-  const material = await crypto.subtle.importKey("raw", encoder.encode(password), "PBKDF2", false, ["deriveBits"]);
-  const hash = await crypto.subtle.deriveBits({ name: "PBKDF2", salt, iterations: 120000, hash: "SHA-256" }, material, 256);
-  return { salt: bytesToBase64(salt), hash: bytesToBase64(hash) };
 }
 
 function setAuthMode(mode) {
@@ -1126,32 +1101,68 @@ function applySignedInUser(account) {
   const previousName = signedInAccount?.name || "이도윤";
   signedInAccount = account;
   migratePlayerIdentity(previousName, account.name);
-  const host = account.teamRoles?.bbat === "host";
+  const role = account.teamRoles?.bbat || "member";
+  const accountRoleLabels = { host: "배트조짐 호스트", admin: "배트조짐 관리자", manager: "배트조짐 매니저", scorer: "배트조짐 기록원", member: "배트조짐 선수" };
+  const canManageTeam = ["host", "admin", "manager"].includes(role);
   document.querySelector(".mini-profile-copy strong").textContent = account.name;
   document.querySelector("#profileDisplayName").textContent = account.name;
   document.querySelector("#profileNameInput").value = account.name;
   document.querySelector("#profileNickname").textContent = account.nickname;
   document.querySelector("#editorIdentityName").textContent = `${account.nickname} (${account.name})`;
   document.querySelector("#settingsAccountName").textContent = `${account.nickname} (${account.name})`;
-  document.querySelector("#settingsAccountMeta").textContent = `${account.username} · ${host ? "배트조짐 호스트" : "선수"}`;
+  document.querySelector("#settingsAccountMeta").textContent = `${account.username} · ${accountRoleLabels[role]}`;
+  document.querySelector("#teamAccessButton").hidden = !canManageTeam;
   renderHomeTeam(document.querySelector("#homeTeamSelect").value);
   renderTeamPage(document.querySelector("#teamPageSelect").value, document.querySelector("#teamLeagueSelect").value);
   renderLeagueRosterSync(document.querySelector("#leagueRosterTeamSelect").value);
 }
 
 function unlockApp(account) {
-  ensureBbatHost(account);
-  localStorage.setItem(authSessionKey, account.username);
   applySignedInUser(account);
   authGate.hidden = true;
   document.body.classList.remove("auth-locked");
 }
 
-function lockApp() {
-  localStorage.removeItem(authSessionKey);
+async function lockApp() {
+  if (supabaseClient) await supabaseClient.auth.signOut();
+  signedInAccount = null;
   authGate.hidden = false;
   document.body.classList.add("auth-locked");
   setAuthMode("login");
+}
+
+async function loadServerAccount(user) {
+  const [{ data: profile, error: profileError }, { data: memberships, error: membershipError }] = await Promise.all([
+    supabaseClient.from("profiles").select("id,username,full_name,nickname,status,must_change_password,created_at").eq("id", user.id).single(),
+    supabaseClient.from("team_members").select("role,status,team:teams(slug,name)").eq("user_id", user.id),
+  ]);
+  if (profileError || membershipError || !profile) throw profileError || membershipError || new Error("PROFILE_NOT_FOUND");
+  const activeMemberships = (memberships || []).filter(item => item.status === "active");
+  if (profile.status !== "active" || !activeMemberships.length) throw new Error("ACCOUNT_SUSPENDED");
+  const teamRoles = {};
+  const accountTeams = [];
+  activeMemberships.forEach(item => {
+    const team = Array.isArray(item.team) ? item.team[0] : item.team;
+    if (!team?.slug) return;
+    teamRoles[team.slug] = item.role;
+    accountTeams.push(team.slug);
+  });
+  return { id: profile.id, username: profile.username, name: profile.full_name, nickname: profile.nickname, createdAt: profile.created_at, mustChangePassword: profile.must_change_password, teamRoles, teams: accountTeams };
+}
+
+async function restoreServerSession() {
+  if (!supabaseClient) {
+    document.querySelector("#loginMessage").textContent = "계정 서버를 불러오지 못했습니다. 잠시 후 새로고침해주세요.";
+    return;
+  }
+  const { data } = await supabaseClient.auth.getSession();
+  if (!data.session?.user) return;
+  try {
+    unlockApp(await loadServerAccount(data.session.user));
+  } catch (error) {
+    await supabaseClient.auth.signOut();
+    document.querySelector("#loginMessage").textContent = error.message === "ACCOUNT_SUSPENDED" ? "사용이 정지된 계정입니다. 팀 호스트에게 문의해주세요." : "계정 정보를 불러오지 못했습니다.";
+  }
 }
 
 authSwitch.addEventListener("click", () => setAuthMode(authSwitch.dataset.mode === "signup" ? "login" : "signup"));
@@ -1178,7 +1189,7 @@ function validatePasswordConfirmation() {
 document.querySelector("#signupPassword").addEventListener("input", validatePasswordConfirmation);
 document.querySelector("#signupPasswordConfirm").addEventListener("input", validatePasswordConfirmation);
 
-document.querySelector("#checkUsernameButton").addEventListener("click", () => {
+document.querySelector("#checkUsernameButton").addEventListener("click", async () => {
   const input = document.querySelector("#signupId");
   const username = normalizeUsername(input.value);
   const message = document.querySelector("#idCheckMessage");
@@ -1188,7 +1199,14 @@ document.querySelector("#checkUsernameButton").addEventListener("click", () => {
     input.reportValidity();
     return;
   }
-  if (readLocalAccounts().some(account => account.username === username)) {
+  const { data: available, error } = await supabaseClient.rpc("username_is_available", { p_username: username });
+  if (error) {
+    signupIdVerified = "";
+    message.textContent = "아이디를 확인하지 못했습니다. 잠시 후 다시 시도해주세요.";
+    message.className = "id-check-message error";
+    return;
+  }
+  if (!available) {
     signupIdVerified = "";
     message.textContent = "이미 사용 중인 아이디예요.";
     message.className = "id-check-message error";
@@ -1210,17 +1228,25 @@ signupForm.addEventListener("submit", async event => {
   submit.disabled = true;
   submit.textContent = "계정 만드는 중";
   try {
-    const credential = await derivePassword(document.querySelector("#signupPassword").value);
-    const account = { id: crypto.randomUUID?.() || `${Date.now()}-${Math.random()}`, username, name: document.querySelector("#signupName").value.trim(), nickname: document.querySelector("#signupNickname").value.trim(), ...credential, createdAt: new Date().toISOString() };
-    const accounts = readLocalAccounts();
-    if (accounts.some(item => item.username === username)) throw new Error("duplicate");
-    accounts.push(account);
-    localStorage.setItem(authStoreKey, JSON.stringify(accounts));
+    const inviteCode = document.querySelector("#signupInviteCode").value.trim();
+    const { data: inviteValid, error: inviteError } = await supabaseClient.rpc("invite_is_valid", { p_code: inviteCode });
+    if (inviteError || !inviteValid) throw new Error("INVALID_INVITE");
+    const { data, error } = await supabaseClient.auth.signUp({
+      email: `${username}@bbatbox.invalid`,
+      password: document.querySelector("#signupPassword").value,
+      options: { data: { username, full_name: document.querySelector("#signupName").value.trim(), nickname: document.querySelector("#signupNickname").value.trim(), invite_code: inviteCode } },
+    });
+    if (error) throw error;
+    if (!data.session) throw new Error("EMAIL_CONFIRMATION_ENABLED");
+    const account = await loadServerAccount(data.user);
     signupForm.reset();
     signupIdVerified = "";
     unlockApp(account);
-  } catch (_) {
-    message.textContent = "계정을 만들지 못했습니다. 다시 시도해주세요.";
+  } catch (error) {
+    if (error.message === "INVALID_INVITE") message.textContent = "초대 코드가 올바르지 않거나 만료되었습니다.";
+    else if (error.message === "EMAIL_CONFIRMATION_ENABLED") message.textContent = "서버의 이메일 확인 설정을 점검해주세요.";
+    else if (/already registered|already exists|duplicate/i.test(error.message)) message.textContent = "이미 사용 중인 아이디입니다.";
+    else message.textContent = "계정을 만들지 못했습니다. 입력 정보를 확인해주세요.";
   } finally {
     submit.disabled = false;
     submit.textContent = "계정 만들기";
@@ -1231,15 +1257,111 @@ loginForm.addEventListener("submit", async event => {
   event.preventDefault();
   const username = normalizeUsername(document.querySelector("#loginId").value);
   const message = document.querySelector("#loginMessage");
-  const account = readLocalAccounts().find(item => item.username === username);
-  if (!account) { message.textContent = "아이디 또는 비밀번호를 확인해주세요."; return; }
-  const credential = await derivePassword(document.querySelector("#loginPassword").value, account.salt);
-  if (credential.hash !== account.hash) { message.textContent = "아이디 또는 비밀번호를 확인해주세요."; return; }
-  message.textContent = "";
-  loginForm.reset();
-  unlockApp(account);
+  const submit = loginForm.querySelector("[type=submit]");
+  submit.disabled = true;
+  submit.textContent = "로그인 중";
+  try {
+    const { data, error } = await supabaseClient.auth.signInWithPassword({
+      email: `${username}@bbatbox.invalid`,
+      password: document.querySelector("#loginPassword").value,
+    });
+    if (error) throw error;
+    const account = await loadServerAccount(data.user);
+    message.textContent = "";
+    loginForm.reset();
+    unlockApp(account);
+  } catch (error) {
+    if (error.message === "ACCOUNT_SUSPENDED") message.textContent = "사용이 정지된 계정입니다. 팀 호스트에게 문의해주세요.";
+    else message.textContent = "아이디 또는 비밀번호를 확인해주세요.";
+    await supabaseClient?.auth.signOut();
+  } finally {
+    submit.disabled = false;
+    submit.textContent = "로그인";
+  }
 });
 
-const initialUsername = localStorage.getItem(authSessionKey);
-const initialAccount = readLocalAccounts().find(account => account.username === initialUsername);
-if (initialAccount) unlockApp(initialAccount);
+const teamAccessModal = document.querySelector("#teamAccessModal");
+const teamAccessBackdrop = document.querySelector("#teamAccessBackdrop");
+const roleLabels = { host: "호스트", admin: "관리자", manager: "매니저", scorer: "기록원", member: "선수" };
+
+function closeTeamAccess() {
+  teamAccessModal.hidden = true;
+  teamAccessBackdrop.hidden = true;
+  document.body.style.overflow = "";
+}
+
+async function renderTeamMembers() {
+  const list = document.querySelector("#memberAdminList");
+  list.innerHTML = '<p class="poll-empty">팀원 정보를 불러오는 중입니다.</p>';
+  const { data, error } = await supabaseClient.rpc("list_team_members");
+  if (error) { list.innerHTML = '<p class="poll-empty">팀원 정보를 불러오지 못했습니다.</p>'; return; }
+  const myRole = signedInAccount?.teamRoles?.bbat;
+  const canEdit = ["host", "admin"].includes(myRole);
+  list.innerHTML = data.map(member => {
+    const protectedAccount = member.role === "host" || member.user_id === signedInAccount.id;
+    const roleOptions = ["member", "scorer", "manager", "admin"].map(role => `<option value="${role}" ${role === member.role ? "selected" : ""}>${roleLabels[role]}</option>`).join("");
+    return `<article class="member-admin-row ${member.status === "suspended" ? "is-suspended" : ""}" data-member-id="${member.user_id}"><div><strong>${escapeMarkup(member.nickname)} (${escapeMarkup(member.full_name)})</strong><small>${escapeMarkup(member.username)} · ${roleLabels[member.role]} · ${new Date(member.joined_at).toLocaleDateString("ko-KR")}</small></div><select data-member-role ${!canEdit || protectedAccount ? "disabled" : ""} aria-label="${escapeMarkup(member.full_name)} 권한">${member.role === "host" ? '<option value="host" selected>호스트</option>' : roleOptions}</select><button class="${member.status === "suspended" ? "activate" : "suspend"}" data-member-status ${!canEdit || protectedAccount ? "disabled" : ""} type="button">${member.status === "suspended" ? "사용 재개" : "사용 정지"}</button></article>`;
+  }).join("");
+}
+
+async function openTeamAccess() {
+  closeSettings();
+  teamAccessModal.hidden = false;
+  teamAccessBackdrop.hidden = false;
+  document.body.style.overflow = "hidden";
+  document.querySelector("#inviteResult").hidden = true;
+  await renderTeamMembers();
+}
+
+document.querySelector("#teamAccessButton").addEventListener("click", openTeamAccess);
+document.querySelector("#closeTeamAccess").addEventListener("click", closeTeamAccess);
+teamAccessBackdrop.addEventListener("click", closeTeamAccess);
+document.querySelector("#refreshMembers").addEventListener("click", renderTeamMembers);
+document.querySelector("#createInviteButton").addEventListener("click", async event => {
+  const button = event.currentTarget;
+  button.disabled = true;
+  try {
+    const { data, error } = await supabaseClient.rpc("create_team_invite", {
+      p_role: document.querySelector("#inviteRole").value,
+      p_expires_days: 30,
+      p_max_uses: Number(document.querySelector("#inviteUses").value) || 1,
+    });
+    if (error) throw error;
+    const invite = data[0];
+    document.querySelector("#inviteCodeValue").textContent = invite.code;
+    document.querySelector("#inviteExpiry").textContent = `${new Date(invite.expires_at).toLocaleDateString("ko-KR")}까지 · ${invite.max_uses}회 사용`;
+    document.querySelector("#inviteResult").hidden = false;
+  } catch (error) {
+    showToast(error?.message?.includes("MAX_EDITORS_REACHED")
+      ? "수정 권한은 팀 방마다 최대 5명까지 지정할 수 있습니다."
+      : "초대 코드를 만들지 못했습니다.");
+  }
+  finally { button.disabled = false; }
+});
+document.querySelector("#copyInviteCode").addEventListener("click", async () => {
+  await navigator.clipboard.writeText(document.querySelector("#inviteCodeValue").textContent);
+  showToast("초대 코드를 복사했습니다.");
+});
+document.querySelector("#memberAdminList").addEventListener("change", async event => {
+  const select = event.target.closest("[data-member-role]");
+  if (!select) return;
+  const row = select.closest("[data-member-id]");
+  const { error } = await supabaseClient.rpc("set_team_member_role", { p_user_id: row.dataset.memberId, p_role: select.value });
+  if (error) {
+    showToast(error.message?.includes("MAX_EDITORS_REACHED")
+      ? "수정 권한은 팀 방마다 최대 5명까지 지정할 수 있습니다."
+      : "권한을 변경하지 못했습니다.");
+  } else showToast("팀원 권한을 변경했습니다.");
+  await renderTeamMembers();
+});
+document.querySelector("#memberAdminList").addEventListener("click", async event => {
+  const button = event.target.closest("[data-member-status]");
+  if (!button) return;
+  const row = button.closest("[data-member-id]");
+  const nextStatus = row.classList.contains("is-suspended") ? "active" : "suspended";
+  const { error } = await supabaseClient.rpc("set_team_member_status", { p_user_id: row.dataset.memberId, p_status: nextStatus });
+  if (error) showToast("계정 상태를 변경하지 못했습니다."); else showToast(nextStatus === "active" ? "계정 사용을 재개했습니다." : "계정 사용을 정지했습니다.");
+  await renderTeamMembers();
+});
+
+restoreServerSession();

@@ -25,7 +25,7 @@
             <label for="loginId">아이디</label>
             <input id="loginId" name="username" autocomplete="username" minlength="3" required placeholder="아이디 입력" />
             <label for="loginPassword">비밀번호</label>
-            <div class="password-field"><input id="loginPassword" name="password" type="password" autocomplete="current-password" minlength="5" required placeholder="5자리 이상" /><button type="button" data-password-toggle="loginPassword" aria-label="비밀번호 보기">보기</button></div>
+            <div class="password-field"><input id="loginPassword" name="password" type="password" autocomplete="current-password" minlength="6" required placeholder="6자리 이상" /><button type="button" data-password-toggle="loginPassword" aria-label="비밀번호 보기">보기</button></div>
             <p class="auth-message" id="loginMessage" role="alert"></p>
             <button class="auth-submit" type="submit">로그인</button>
           </form>
@@ -36,16 +36,18 @@
             <div class="username-field"><input id="signupId" autocomplete="username" minlength="3" maxlength="20" pattern="[A-Za-z0-9_]+" required placeholder="영문·숫자 3자리 이상" /><button id="checkUsernameButton" type="button">중복 확인</button></div>
             <p class="id-check-message" id="idCheckMessage" aria-live="polite">영문, 숫자, 밑줄만 사용할 수 있어요.</p>
             <label for="signupPassword">비밀번호</label>
-            <div class="password-field"><input id="signupPassword" type="password" autocomplete="new-password" minlength="5" required placeholder="5자리 이상" /><button type="button" data-password-toggle="signupPassword" aria-label="비밀번호 보기">보기</button></div>
+            <div class="password-field"><input id="signupPassword" type="password" autocomplete="new-password" minlength="6" required placeholder="6자리 이상" /><button type="button" data-password-toggle="signupPassword" aria-label="비밀번호 보기">보기</button></div>
             <label for="signupPasswordConfirm">비밀번호 확인</label>
-            <div class="password-field"><input id="signupPasswordConfirm" type="password" autocomplete="new-password" minlength="5" required placeholder="비밀번호 다시 입력" /><button type="button" data-password-toggle="signupPasswordConfirm" aria-label="비밀번호 확인 보기">보기</button></div>
+            <div class="password-field"><input id="signupPasswordConfirm" type="password" autocomplete="new-password" minlength="6" required placeholder="비밀번호 다시 입력" /><button type="button" data-password-toggle="signupPasswordConfirm" aria-label="비밀번호 확인 보기">보기</button></div>
             <label for="signupNickname">닉네임</label>
             <input id="signupNickname" maxlength="16" required placeholder="팀원에게 보일 이름" />
+            <label for="signupInviteCode">팀 초대 코드</label>
+            <input id="signupInviteCode" maxlength="32" required autocomplete="off" placeholder="관리자에게 받은 초대 코드" />
             <p class="auth-message" id="signupMessage" role="alert"></p>
             <button class="auth-submit" type="submit">계정 만들기</button>
           </form>
           <button class="auth-switch" id="authSwitch" type="button">회원이 아니신가요? <b>회원가입</b></button>
-          <small class="auth-demo-note">현재 테스트 버전에서는 이 기기에 계정이 저장됩니다.</small>
+          <small class="auth-demo-note">계정과 팀 권한은 BBAT BOX 서버에 안전하게 저장됩니다.</small>
         </div>
       </div>
     </section>
@@ -215,8 +217,20 @@
     <div class="modal-backdrop" id="lineupBackdrop" hidden></div>
     <section class="lineup-modal" id="lineupModal" role="dialog" aria-modal="true" aria-labelledby="lineupModalTitle" hidden><header><div><p id="lineupGameLabel">다가오는 경기</p><h2 id="lineupModalTitle">라인업</h2></div><button id="closeLineupModal" type="button" aria-label="라인업 닫기">×</button></header><div class="lineup-participants"><span>참가명단</span><div id="lineupParticipants"></div><div class="manual-participant"><label>마감 후 참가자 추가<select id="manualParticipantSelect" aria-label="관리자가 추가할 참가자"></select></label><button id="addManualParticipant" type="button">참가 등록</button></div></div><form id="lineupForm"><section class="lineup-pitcher"><strong>선발투수</strong><label>선수<select id="lineupPitcherSelect"></select></label></section><section class="lineup-relievers"><div class="reliever-head"><div><strong>구원투수 예정</strong><span>2명부터 최대 4명까지 지정</span></div><button id="addRelieverButton" type="button">+ 구원투수</button></div><div id="lineupRelieverList"></div></section><div class="lineup-section-title"><strong>타순</strong><span>1번부터 9번까지 선수와 실제 수비 위치를 지정하세요.</span></div><div class="lineup-order" id="lineupOrder"></div><section class="lineup-bench"><div class="lineup-section-title"><strong>후보 명단</strong><span>참가자 중 라인업에 포함되지 않은 선수</span></div><div id="lineupBenchList"></div></section><div class="form-actions"><button class="outline-action" id="cancelLineup" type="button">취소</button><button class="primary-action" type="submit">라인업 저장</button></div></form></section>
     <div class="modal-backdrop" id="modalBackdrop" hidden></div>
-    <aside class="settings-sheet" id="settingsSheet" role="dialog" aria-modal="true" aria-labelledby="settingsTitle" hidden><header><div><p>내 계정</p><h2 id="settingsTitle">설정</h2></div><button id="closeSettings" type="button" aria-label="설정 닫기">×</button></header><div class="settings-user"><div class="mini-avatar large"><span>23</span></div><div><strong id="settingsAccountName">이도윤</strong><small id="settingsAccountMeta">kuku98 · 선수 / 기록원</small></div></div><button class="setting-row" type="button"><span>프로필 수정</span><b>›</b></button><button class="setting-row" type="button"><span>알림 설정</span><b>›</b></button><button class="setting-row" type="button"><span>팀 및 권한</span><b>›</b></button><button class="setting-row" type="button"><span>개인정보 및 보안</span><b>›</b></button><button class="setting-row logout-row" id="logoutButton" type="button"><span>로그아웃</span><b>나가기</b></button></aside>
+    <aside class="settings-sheet" id="settingsSheet" role="dialog" aria-modal="true" aria-labelledby="settingsTitle" hidden><header><div><p>내 계정</p><h2 id="settingsTitle">설정</h2></div><button id="closeSettings" type="button" aria-label="설정 닫기">×</button></header><div class="settings-user"><div class="mini-avatar large"><span>23</span></div><div><strong id="settingsAccountName">이도윤</strong><small id="settingsAccountMeta">kuku98 · 선수 / 기록원</small></div></div><button class="setting-row" type="button"><span>프로필 수정</span><b>›</b></button><button class="setting-row" type="button"><span>알림 설정</span><b>›</b></button><button class="setting-row" id="teamAccessButton" type="button" hidden><span>팀원·초대 관리</span><b>›</b></button><button class="setting-row" type="button"><span>개인정보 및 보안</span><b>›</b></button><button class="setting-row logout-row" id="logoutButton" type="button"><span>로그아웃</span><b>나가기</b></button></aside>
+    <div class="modal-backdrop" id="teamAccessBackdrop" hidden></div>
+    <section class="schedule-modal account-admin-modal" id="teamAccessModal" role="dialog" aria-modal="true" aria-labelledby="teamAccessTitle" hidden>
+      <header><div><p>배트조짐 HOST</p><h2 id="teamAccessTitle">팀원·초대 관리</h2></div><button id="closeTeamAccess" type="button" aria-label="팀원 관리 닫기">×</button></header>
+      <section class="invite-maker">
+        <div><strong>새 초대 코드</strong><small>코드는 생성 직후 한 번만 표시됩니다.</small></div>
+        <div class="invite-controls"><label>권한<select id="inviteRole"><option value="member">선수</option><option value="scorer">기록원</option><option value="manager">매니저</option><option value="admin">관리자</option></select></label><label>사용 횟수<input id="inviteUses" type="number" min="1" max="20" value="1" /></label><button class="primary-action" id="createInviteButton" type="button">초대 코드 만들기</button></div>
+        <p class="schedule-permission-note">관리자·매니저·기록원 등 수정 권한은 팀 방마다 호스트를 제외하고 최대 5명까지 지정할 수 있습니다.</p>
+        <div class="invite-result" id="inviteResult" hidden><span>발급된 코드</span><strong id="inviteCodeValue"></strong><button id="copyInviteCode" type="button">코드 복사</button><small id="inviteExpiry"></small></div>
+      </section>
+      <section class="member-admin-section"><div class="section-head"><div><p>가입 계정</p><h2>팀원 목록</h2></div><button class="text-button" id="refreshMembers" type="button">새로고침</button></div><div class="member-admin-list" id="memberAdminList"><p class="poll-empty">팀원 정보를 불러오는 중입니다.</p></div></section>
+      <p class="schedule-permission-note">비밀번호 원문은 누구에게도 표시되지 않습니다. 계정 권한 변경과 사용 정지는 서버에서 즉시 적용됩니다.</p>
+    </section>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="app.js?v=9"></script><script src="scorebook.js?v=8"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="supabase-config.js?v=1"></script><script src="app.js?v=10"></script><script src="scorebook.js?v=8"></script>
   </body>
 </html>
