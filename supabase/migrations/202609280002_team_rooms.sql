@@ -78,7 +78,7 @@ begin
   ) values (
     v_team.id, auth.uid(), v_profile.full_name, '미정',
     '{}'::text[], 'account', auth.uid()
-  ) on conflict (team_id, linked_user_id) where linked_user_id is not null do nothing;
+  ) on conflict do nothing;
 
   insert into public.account_audit_log (team_id, actor_id, target_id, action, details)
   values (v_team.id, auth.uid(), auth.uid(), 'team_room_created', jsonb_build_object('name', v_team.name));
