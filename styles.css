@@ -332,3 +332,19 @@ button:focus-visible, select:focus-visible, textarea:focus-visible { outline: 3p
   .on-deck-board ol { grid-template-columns: 1fr; }
 }
 @media (prefers-reduced-motion: reduce) { .inning-selector button { transition: none; } }
+
+.team-setup-gate { position: fixed; inset: 0; z-index: 1200; display: grid; place-items: center; padding: max(22px, env(safe-area-inset-top)) 20px max(22px, env(safe-area-inset-bottom)); background: #eef4f2; }
+.team-setup-gate[hidden] { display: none; }
+.team-setup-card { width: min(100%, 520px); border: 1px solid #c8d7d3; border-radius: 28px; padding: clamp(26px, 5vw, 44px); background: #fff; box-shadow: 0 28px 70px rgba(6, 38, 44, .16); }
+.team-setup-mark { display: flex; align-items: center; gap: 10px; color: #0b3539; font-weight: 800; }
+.team-setup-mark img { width: 42px; height: 42px; border-radius: 12px; }
+.team-setup-copy { margin: 28px 0 24px; }
+.team-setup-copy p { margin: 0 0 8px; color: #13776b; font-weight: 700; }
+.team-setup-copy h1 { margin: 0 0 12px; color: #092f35; font-size: clamp(28px, 7vw, 42px); line-height: 1.08; letter-spacing: -.04em; }
+.team-setup-copy span { display: block; color: #5d706f; line-height: 1.65; }
+.team-setup-card form { display: grid; gap: 10px; }
+.team-setup-card label { color: #173b3f; font-size: 13px; font-weight: 700; }
+.team-setup-card input { min-height: 52px; border: 1px solid #c7d5d2; border-radius: 14px; padding: 0 16px; font: inherit; }
+.team-setup-card input:focus { outline: 3px solid rgba(19, 119, 107, .16); border-color: #13776b; }
+.team-setup-logout { display: block; margin: 16px auto 0; border: 0; background: transparent; color: #687a79; text-decoration: underline; cursor: pointer; }
+body.team-setup-required .app-header, body.team-setup-required .app-main, body.team-setup-required .bottom-nav { visibility: hidden; }

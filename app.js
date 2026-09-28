@@ -330,6 +330,8 @@ function possiblePositions(player) {
 
 function renderTeamPage(key, requestedLeagueId) {
   const team = teams[key];
+  const teamRole = signedInAccount?.teamRoles?.[key];
+  const canManageRoster = ["host", "admin", "manager"].includes(teamRole);
   const leagueSelect = document.querySelector("#teamLeagueSelect");
   const leagueId = populateLeagueSelect(leagueSelect, key, requestedLeagueId || leagueSelect.value);
   const league = getLeague(key, leagueId);
@@ -339,7 +341,9 @@ function renderTeamPage(key, requestedLeagueId) {
   document.querySelector("#teamMyNumber").textContent = team.number;
   document.querySelector("#teamName").textContent = team.name;
   document.querySelector("#teamMeta").textContent = team.teamMeta.split(" · ").slice(0, 2).join(" · ");
-  document.querySelector("#teamHostBadge").hidden = !(key === "bbat" && signedInAccount?.teamRoles?.bbat === "host");
+  document.querySelector("#teamHostBadge").hidden = teamRole !== "host";
+  document.querySelector("#addPlayerButton").hidden = !canManageRoster;
+  document.querySelector("#openTeamScheduleEditor").hidden = !canManageRoster;
   document.querySelector("#teamLeagueLabel").textContent = league.name;
   document.querySelector("#teamSeasonLabel").textContent = league.season;
   document.querySelector("#teamWins").textContent = league.record;
@@ -373,6 +377,7 @@ let rosterRecordMode = "hitting";
 let selectedRosterPlayerIndex = 0;
 
 function hittingRecord(player, index) {
+  if (player.source) return { G: 0, PA: 0, AB: 0, H: 0, "2B": 0, "3B": 0, HR: 0, RBI: 0, R: 0, BB: 0, SB: 0, AVG: ".000", OPS: ".000" };
   const games = 18 - index % 5;
   const pa = 62 - index * 2;
   const walks = 4 + index % 5;
@@ -400,6 +405,7 @@ function linkedHittingRecord(teamKey, player) {
 }
 
 function pitchingRecord(player, index) {
+  if (player.source) return { G: 0, GS: 0, IP: "0.0", W: 0, L: 0, SV: 0, H: 0, BB: 0, K: 0, ERA: "0.00", WHIP: "0.00" };
   const era = Number(player.stat);
   const innings = 42.1 - index * 4.2;
   const strikeouts = Number(player.detail.find(([label]) => label === "삼진")?.[1] || 29);
@@ -412,6 +418,12 @@ function renderRosterTable(teamKey) {
   const metricColumns = rosterRecordMode === "hitting" ? ["G", "PA", "AB", "H", "2B", "3B", "HR", "RBI", "R", "BB", "SB", "AVG", "OPS"] : ["G", "GS", "IP", "W", "L", "SV", "H", "BB", "K", "ERA", "WHIP"];
   const columns = [...metricColumns, ...Array(13 - metricColumns.length).fill("")];
   document.querySelector("#playerRecordTableHead").innerHTML = `<tr><th>사진</th><th>등번호</th><th>이름</th><th>포지션</th>${columns.map(column => `<th>${column}</th>`).join("")}</tr>`;
+  if (!visiblePlayers.length) {
+    document.querySelector("#playerRecordTableBody").innerHTML = `<tr><td colspan="17">${rosterRecordMode === "pitching" ? "등록된 투수가 없습니다." : "등록된 선수가 없습니다."}</td></tr>`;
+    document.querySelector("#rosterPlayerSelect").innerHTML = '<option value="">선수 없음</option>';
+    selectedRosterPlayerIndex = -1;
+    return;
+  }
   document.querySelector("#playerRecordTableBody").innerHTML = visiblePlayers.map(({ player, index }, visibleIndex) => {
     const record = rosterRecordMode === "hitting" ? (linkedHittingRecord(teamKey, player) || hittingRecord(player, index)) : pitchingRecord(player, visibleIndex);
     return `<tr class="${index === selectedRosterPlayerIndex ? "active" : ""}" data-player-row="${index}" data-player-index="${index}"><td><span class="table-player-photo" aria-hidden="true">${player.name.slice(0, 1)}</span></td><td><b class="table-number">${player.number}</b></td><td><button class="record-player-button" type="button"><span><strong>${player.name}</strong><small>${player.role}</small></span></button></td><td>${player.position}</td>${columns.map(column => `<td>${column ? record[column] : ""}</td>`).join("")}</tr>`;
@@ -424,6 +436,14 @@ function renderRosterTable(teamKey) {
 
 function renderPlayerAnalysis(teamKey, playerIndex) {
   const player = rosters[teamKey].players[playerIndex];
+  if (!player) {
+    document.querySelector("#detailPlayerTitle").textContent = "선수를 추가하면 기록이 표시됩니다";
+    document.querySelector("#playerDetailStats").innerHTML = "";
+    document.querySelector("#recentFormBars").innerHTML = "";
+    document.querySelector("#analysisName").textContent = "선수 없음";
+    document.querySelector("#analysisMetrics").innerHTML = "";
+    return;
+  }
   selectedRosterPlayerIndex = playerIndex;
   document.querySelectorAll("[data-player-row]").forEach(row => row.classList.toggle("active", Number(row.dataset.playerRow) === playerIndex));
   document.querySelector("#rosterPlayerSelect").value = String(playerIndex);
@@ -590,7 +610,7 @@ function renderLiveTab(tab) {
     const state = getLiveState();
     list.innerHTML = state?.live ? `<button class="live-game-card" type="button" data-open-live="main"><span class="live-now"><i></i>LIVE · 기록 동기화 중</span><div class="live-teams"><div><span class="small-crest home">B</span><strong>${state.ourTeam}</strong><b>${state.ourRuns}</b></div><div class="inning"><strong>${state.inningLabel}</strong><small>${state.outs}사 · ${state.currentBase ? `주자 ${state.currentBase}루` : "주자 없음"}</small></div><div><span class="small-crest away">A</span><strong>${state.opponent}</strong><b>${state.oppRuns}</b></div></div><span class="watch-live">고화질 상황판 보기</span></button>` : `<div class="live-empty"><span class="live-empty-icon">◇</span><strong>현재 진행 중인 LIVE 경기가 없어요.</strong><p>리그 경기 기록 상단의 LIVE 버튼을 누르면 상황판 방이 바로 열립니다.</p></div>`;
   } else {
-    list.innerHTML = `<button class="live-game-card finished" type="button"><span class="date-line">경기 종료 · 9월 14일</span><div class="live-teams"><div><span class="small-crest home">B</span><strong>브레이브스</strong><b>7</b></div><div class="inning"><strong>종료</strong><small>한강 토요리그</small></div><div><span class="small-crest away">T</span><strong>타이탄즈</strong><b>4</b></div></div><span class="watch-live">경기 기록 보기</span></button><button class="live-game-card finished" type="button"><span class="date-line">경기 종료 · 9월 7일</span><div class="live-teams"><div><span class="small-crest home">B</span><strong>배트조짐</strong><b>5</b></div><div class="inning"><strong>종료</strong><small>서울 일요리그</small></div><div><span class="small-crest away">R</span><strong>러너스</strong><b>5</b></div></div><span class="watch-live">경기 기록 보기</span></button>`;
+    list.innerHTML = `<div class="live-empty"><strong>종료된 경기가 없습니다.</strong><p>경기 기록을 마치면 지난 LIVE 경기가 여기에 쌓입니다.</p></div>`;
   }
 }
 
@@ -762,7 +782,8 @@ document.querySelectorAll("[data-record-mode]").forEach(button => button.addEven
     item.setAttribute("aria-selected", String(active));
   });
   const teamKey = document.querySelector("#teamPageSelect").value;
-  if (rosterRecordMode === "pitching" && !rosters[teamKey].players[selectedRosterPlayerIndex].pitcher) selectedRosterPlayerIndex = rosters[teamKey].players.findIndex(player => player.pitcher);
+  const selectedPlayer = rosters[teamKey].players[selectedRosterPlayerIndex];
+  if (rosterRecordMode === "pitching" && !selectedPlayer?.pitcher) selectedRosterPlayerIndex = rosters[teamKey].players.findIndex(player => player.pitcher);
   renderRosterTable(teamKey);
   renderPlayerAnalysis(teamKey, selectedRosterPlayerIndex);
 }));
@@ -771,12 +792,14 @@ document.querySelector("#addPlayerButton").addEventListener("click", openPlayerM
 document.querySelector("#closePlayerModal").addEventListener("click", closePlayerModal);
 document.querySelector("#cancelPlayerAdd").addEventListener("click", closePlayerModal);
 playerBackdrop.addEventListener("click", closePlayerModal);
-document.querySelector("#playerForm").addEventListener("submit", event => {
+document.querySelector("#playerForm").addEventListener("submit", async event => {
   event.preventDefault();
   const teamKey = document.querySelector("#teamPageSelect").value;
+  const teamId = signedInAccount?.teamIds?.[teamKey];
   const position = document.querySelector("#newPlayerPosition").value;
   const isPitcher = ["SP", "RP", "P"].includes(position);
-  const player = {
+  const possiblePositionList = document.querySelector("#newPlayerPositions").value.split(",").map(value => value.trim().toUpperCase()).filter(Boolean);
+  const draft = {
     number: document.querySelector("#newPlayerNumber").value.trim(),
     name: document.querySelector("#newPlayerName").value.trim(),
     position,
@@ -788,18 +811,41 @@ document.querySelector("#playerForm").addEventListener("submit", event => {
     metrics: [50, 50, 50, 50, 50],
     detail: isPitcher ? [["ERA", "0.00"], ["삼진", "0"], ["WHIP", "0.00"]] : [["타율", ".000"], ["OPS", ".000"], ["타점", "0"]],
     pitcher: isPitcher,
-    possiblePositions: document.querySelector("#newPlayerPositions").value.split(",").map(value => value.trim()).filter(Boolean),
+    possiblePositions: possiblePositionList,
     custom: true
   };
-  rosters[teamKey].players.push(player);
-  const customPlayers = Object.fromEntries(Object.entries(rosters).map(([key, roster]) => [key, roster.players.filter(item => item.custom)]));
-  localStorage.setItem("bbat-box-added-players", JSON.stringify(customPlayers));
-  event.target.reset();
-  closePlayerModal();
-  renderRosterManagement(teamKey);
-  renderRosterPreview(teamKey);
-  renderLeagueRosterSync(teamKey);
-  showToast(`${player.name} 선수를 선수단과 리그 기록 명단에 추가했습니다.`);
+  const submit = event.currentTarget.querySelector("[type=submit]");
+  submit.disabled = true;
+  submit.textContent = "추가 중";
+  try {
+    if (!teamId) throw new Error("TEAM_REQUIRED");
+    const { data, error } = await supabaseClient.rpc("add_manual_team_player", {
+      p_team_id: teamId,
+      p_name: draft.name,
+      p_number: draft.number,
+      p_primary_position: position,
+      p_possible_positions: possiblePositionList,
+      p_throws: document.querySelector("#newPlayerThrows").value,
+      p_bats: document.querySelector("#newPlayerBats").value,
+    });
+    if (error) throw error;
+    const savedPlayer = Array.isArray(data) ? data[0] : data;
+    const player = savedPlayer ? mapServerPlayer(savedPlayer) : draft;
+    rosters[teamKey].players.push(player);
+    event.target.reset();
+    closePlayerModal();
+    renderRosterManagement(teamKey);
+    renderRosterPreview(teamKey);
+    renderLeagueRosterSync(teamKey);
+    showToast(`${player.name} 선수를 명단에 추가했습니다.`);
+  } catch (error) {
+    showToast(error.message?.includes("team_players_number_key")
+      ? "이미 사용 중인 등번호입니다."
+      : "선수를 추가하지 못했습니다. 입력 내용을 확인해주세요.");
+  } finally {
+    submit.disabled = false;
+    submit.textContent = "명단에 추가";
+  }
 });
 document.querySelector("#leagueRosterTeamSelect").addEventListener("change", event => renderLeagueRosterSync(event.target.value));
 document.querySelector("#openTeamScheduleEditor").addEventListener("click", openScheduleEditor);
@@ -1049,6 +1095,81 @@ function normalizeUsername(value) { return value.trim().toLowerCase(); }
 function escapeMarkup(value) { return String(value ?? "").replace(/[&<>"']/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]); }
 function currentAccountName() { return signedInAccount?.name || "이도윤"; }
 
+function accountTeams(account = signedInAccount) {
+  return (account?.teamDetails || []).filter(team => team.setupComplete);
+}
+
+function placeholderGame() {
+  const date = new Date();
+  date.setDate(date.getDate() + 14);
+  return { date: toDateKey(date), time: "09:00", opponent: "상대팀 미정", venue: "경기장 미정" };
+}
+
+function ensureClientTeam(team) {
+  const key = team.slug;
+  teams[key] = {
+    name: team.name, header: `${team.name} · 포지션 미정`, role: "선수", position: "미정", bats: "우투우타", games: "0경기",
+    number: "-", initial: team.name.trim().slice(0, 1) || "B", logo: "", logoColors: ["#0b3539", "#147565"], league: "리그 미설정", standing: "시즌 준비 중",
+    title: `${team.name}에서의 시즌`, trend: "첫 기록을 기다리고 있어요", summary: "0경기 · 0타석",
+    stats: [["타율", ".000"], ["타점", "0"], ["OPS", ".000"]], teamMeta: "새로 만든 팀 방", wins: "0승 0패", rank: "-"
+  };
+  teamLeagues[key] = teamLeagues[key] || [{ id: `${key}-league`, name: "리그 미설정", season: "첫 시즌", record: "0승 0패", rank: "-", nextGame: placeholderGame() }];
+  rosters[key] = rosters[key] || { staff: [], players: [] };
+}
+
+function syncAccountTeamSelectors(account) {
+  const availableTeams = accountTeams(account);
+  const allowedKeys = new Set(availableTeams.map(team => team.slug));
+  Object.keys(teams).forEach(key => { if (!allowedKeys.has(key)) delete teams[key]; });
+  Object.keys(teamLeagues).forEach(key => { if (!allowedKeys.has(key)) delete teamLeagues[key]; });
+  Object.keys(rosters).forEach(key => { if (!allowedKeys.has(key)) delete rosters[key]; });
+  availableTeams.forEach(ensureClientTeam);
+  const options = availableTeams.map(team => `<option value="${escapeMarkup(team.slug)}">${escapeMarkup(team.name)}</option>`).join("");
+  ["#homeTeamSelect", "#teamPageSelect", "#leagueRosterTeamSelect", "#profileTeamSelect", "#scheduleTeamInput"].forEach(selector => {
+    const select = document.querySelector(selector);
+    if (select) select.innerHTML = options;
+  });
+  account.teams = availableTeams.map(team => team.slug);
+  account.teamIds = Object.fromEntries(availableTeams.map(team => [team.slug, team.id]));
+  account.teamRoles = Object.fromEntries(availableTeams.map(team => [team.slug, team.role]));
+}
+
+function selectedAccountTeamKey() {
+  return document.querySelector("#homeTeamSelect")?.value || signedInAccount?.teams?.[0] || "";
+}
+
+function selectedAccountTeamId() {
+  return signedInAccount?.teamIds?.[selectedAccountTeamKey()] || null;
+}
+
+function mapServerPlayer(player) {
+  const position = player.primary_position || "미정";
+  const isPitcher = ["SP", "RP", "P"].includes(position);
+  return {
+    id: player.id, number: player.number || "-", name: player.name, position,
+    role: isPitcher ? "투수" : positionLabels[position] || "선수",
+    bats: `${player.throws}${player.bats}`, avg: 0, ops: 0,
+    stat: isPitcher ? "0.00" : ".000", metrics: [50, 50, 50, 50, 50],
+    detail: isPitcher ? [["ERA", "0.00"], ["삼진", "0"], ["WHIP", "0.00"]] : [["타율", ".000"], ["OPS", ".000"], ["타점", "0"]],
+    pitcher: isPitcher, possiblePositions: player.possible_positions || [], custom: player.source === "manual", source: player.source
+  };
+}
+
+async function loadAccountTeamPlayers(account) {
+  await Promise.all(accountTeams(account).map(async team => {
+    const { data, error } = await supabaseClient.rpc("list_team_players", { p_team_id: team.id });
+    if (!error && rosters[team.slug]) rosters[team.slug].players = (data || []).map(mapServerPlayer);
+  }));
+}
+
+function renderFreshTeamEmptyStates(teamKey) {
+  const team = teams[teamKey];
+  const miniList = document.querySelector(".league-mini-list");
+  if (miniList) miniList.innerHTML = `<div class="poll-empty"><strong>아직 참여 중인 리그가 없습니다.</strong><p>${escapeMarkup(team.name)}의 첫 리그를 만들면 여기에 표시됩니다.</p></div>`;
+  const accordion = document.querySelector("#leagueAccordion");
+  if (accordion) accordion.innerHTML = `<div class="live-empty"><strong>아직 등록한 리그가 없습니다.</strong><p>리그를 만든 뒤 경기 일정과 기록을 시작할 수 있습니다.</p></div>`;
+}
+
 function migratePlayerIdentity(previousName, nextName) {
   if (!nextName || previousName === nextName) return;
   Object.values(rosters).forEach(roster => roster.players.forEach(player => {
@@ -1081,7 +1202,7 @@ async function updateSignedInAccount(changes) {
   }
   signedInAccount = { ...signedInAccount, ...changes, name: data.full_name, nickname: data.nickname };
   migratePlayerIdentity(previousName, signedInAccount.name);
-  applySignedInUser(signedInAccount);
+  await applySignedInUser(signedInAccount);
 }
 
 function setAuthMode(mode) {
@@ -1096,58 +1217,121 @@ function setAuthMode(mode) {
   document.querySelector(joining ? "#signupName" : "#loginId").focus();
 }
 
-function applySignedInUser(account) {
+async function applySignedInUser(account) {
   if (!account) return;
   const previousName = signedInAccount?.name || "이도윤";
   signedInAccount = account;
   migratePlayerIdentity(previousName, account.name);
-  const role = account.teamRoles?.bbat || "member";
-  const accountRoleLabels = { host: "배트조짐 호스트", admin: "배트조짐 관리자", manager: "배트조짐 매니저", scorer: "배트조짐 기록원", member: "배트조짐 선수" };
-  const canManageTeam = ["host", "admin", "manager"].includes(role);
+  syncAccountTeamSelectors(account);
+  await loadAccountTeamPlayers(account);
+  const firstTeam = accountTeams(account)[0];
+  const role = firstTeam?.role || (account.isPlatformHost ? "host" : "member");
+  const roleLabelsWithTeam = { host: "호스트", admin: "관리자", manager: "매니저", scorer: "기록원", member: "선수" };
+  const canManageTeam = accountTeams(account).some(team => ["host", "admin", "manager"].includes(team.role));
   document.querySelector(".mini-profile-copy strong").textContent = account.name;
   document.querySelector("#profileDisplayName").textContent = account.name;
   document.querySelector("#profileNameInput").value = account.name;
   document.querySelector("#profileNickname").textContent = account.nickname;
   document.querySelector("#editorIdentityName").textContent = `${account.nickname} (${account.name})`;
   document.querySelector("#settingsAccountName").textContent = `${account.nickname} (${account.name})`;
-  document.querySelector("#settingsAccountMeta").textContent = `${account.username} · ${accountRoleLabels[role]}`;
+  document.querySelector("#settingsAccountMeta").textContent = `${account.username} · ${firstTeam ? `${firstTeam.name} ${roleLabelsWithTeam[role]}` : "팀 만들기 전"}`;
   document.querySelector("#teamAccessButton").hidden = !canManageTeam;
-  renderHomeTeam(document.querySelector("#homeTeamSelect").value);
-  renderTeamPage(document.querySelector("#teamPageSelect").value, document.querySelector("#teamLeagueSelect").value);
-  renderLeagueRosterSync(document.querySelector("#leagueRosterTeamSelect").value);
+  if (firstTeam) {
+    renderHomeTeam(firstTeam.slug);
+    renderTeamPage(firstTeam.slug, teamLeagues[firstTeam.slug][0].id);
+    renderLeagueRosterSync(firstTeam.slug);
+    renderFreshTeamEmptyStates(firstTeam.slug);
+    buildCalendar();
+    renderCalendarDay(toDateKey(new Date()));
+  }
 }
 
-function unlockApp(account) {
-  applySignedInUser(account);
+function resetPrototypeDataForFirstTeamSetup(account) {
+  if (!account?.id || !account.isPlatformHost || accountTeams(account).length > 0) return;
+  const marker = `bbat-box-clean-start:${account.id}`;
+  if (localStorage.getItem(marker)) return;
+  [
+    "bbat-box-schedules",
+    "bbat-box-added-players",
+    "bbat-box-attendance",
+    "bbat-box-lineups",
+    "bbat-box-linked-player-stats-v1",
+    "bbat-box-game-records-v2",
+    "bbat-box-live-game-v1",
+  ].forEach(key => localStorage.removeItem(key));
+  attendanceState = {};
+  lineupState = {};
+  localStorage.setItem(marker, new Date().toISOString());
+}
+
+async function unlockApp(account) {
+  resetPrototypeDataForFirstTeamSetup(account);
+  await applySignedInUser(account);
   authGate.hidden = true;
   document.body.classList.remove("auth-locked");
+  const needsTeam = accountTeams(account).length === 0;
+  document.querySelector("#teamSetupGate").hidden = !needsTeam;
+  document.body.classList.toggle("team-setup-required", needsTeam);
+  if (needsTeam) document.querySelector("#teamSetupName").focus();
 }
 
 async function lockApp() {
   if (supabaseClient) await supabaseClient.auth.signOut();
   signedInAccount = null;
+  document.querySelector("#teamSetupGate").hidden = true;
+  document.body.classList.remove("team-setup-required");
   authGate.hidden = false;
   document.body.classList.add("auth-locked");
   setAuthMode("login");
 }
 
+document.querySelector("#teamSetupForm").addEventListener("submit", async event => {
+  event.preventDefault();
+  const name = document.querySelector("#teamSetupName").value.trim();
+  const message = document.querySelector("#teamSetupMessage");
+  const button = event.currentTarget.querySelector("[type=submit]");
+  if (name.length < 2) { message.textContent = "팀 이름을 두 글자 이상 입력해주세요."; return; }
+  button.disabled = true;
+  button.textContent = "팀 방 만드는 중";
+  message.textContent = "";
+  try {
+    const { error } = await supabaseClient.rpc("create_team_room", { p_name: name });
+    if (error) throw error;
+    const { data } = await supabaseClient.auth.getUser();
+    const account = await loadServerAccount(data.user);
+    await unlockApp(account);
+    event.currentTarget.reset();
+    showToast(`${name} 팀 방을 만들었습니다.`);
+  } catch (error) {
+    message.textContent = error.message?.includes("HOST_REQUIRED")
+      ? "BBAT BOX 호스트만 새 팀 방을 만들 수 있습니다."
+      : "팀 방을 만들지 못했습니다. 잠시 후 다시 시도해주세요.";
+  } finally {
+    button.disabled = false;
+    button.textContent = "팀 방 만들기";
+  }
+});
+document.querySelector("#teamSetupLogout").addEventListener("click", lockApp);
+
 async function loadServerAccount(user) {
   const [{ data: profile, error: profileError }, { data: memberships, error: membershipError }] = await Promise.all([
-    supabaseClient.from("profiles").select("id,username,full_name,nickname,status,must_change_password,created_at").eq("id", user.id).single(),
-    supabaseClient.from("team_members").select("role,status,team:teams(slug,name)").eq("user_id", user.id),
+    supabaseClient.from("profiles").select("id,username,full_name,nickname,status,is_platform_host,must_change_password,created_at").eq("id", user.id).single(),
+    supabaseClient.from("team_members").select("role,status,team:teams(id,slug,name,setup_complete)").eq("user_id", user.id),
   ]);
   if (profileError || membershipError || !profile) throw profileError || membershipError || new Error("PROFILE_NOT_FOUND");
   const activeMemberships = (memberships || []).filter(item => item.status === "active");
-  if (profile.status !== "active" || !activeMemberships.length) throw new Error("ACCOUNT_SUSPENDED");
+  if (profile.status !== "active") throw new Error("ACCOUNT_SUSPENDED");
   const teamRoles = {};
-  const accountTeams = [];
+  const accountTeamSlugs = [];
+  const teamDetails = [];
   activeMemberships.forEach(item => {
     const team = Array.isArray(item.team) ? item.team[0] : item.team;
     if (!team?.slug) return;
     teamRoles[team.slug] = item.role;
-    accountTeams.push(team.slug);
+    accountTeamSlugs.push(team.slug);
+    teamDetails.push({ id: team.id, slug: team.slug, name: team.name, setupComplete: team.setup_complete, role: item.role });
   });
-  return { id: profile.id, username: profile.username, name: profile.full_name, nickname: profile.nickname, createdAt: profile.created_at, mustChangePassword: profile.must_change_password, teamRoles, teams: accountTeams };
+  return { id: profile.id, username: profile.username, name: profile.full_name, nickname: profile.nickname, isPlatformHost: profile.is_platform_host, createdAt: profile.created_at, mustChangePassword: profile.must_change_password, teamRoles, teams: accountTeamSlugs, teamDetails };
 }
 
 async function restoreServerSession() {
@@ -1158,7 +1342,7 @@ async function restoreServerSession() {
   const { data } = await supabaseClient.auth.getSession();
   if (!data.session?.user) return;
   try {
-    unlockApp(await loadServerAccount(data.session.user));
+    await unlockApp(await loadServerAccount(data.session.user));
   } catch (error) {
     await supabaseClient.auth.signOut();
     document.querySelector("#loginMessage").textContent = error.message === "ACCOUNT_SUSPENDED" ? "사용이 정지된 계정입니다. 팀 호스트에게 문의해주세요." : "계정 정보를 불러오지 못했습니다.";
@@ -1241,7 +1425,7 @@ signupForm.addEventListener("submit", async event => {
     const account = await loadServerAccount(data.user);
     signupForm.reset();
     signupIdVerified = "";
-    unlockApp(account);
+    await unlockApp(account);
   } catch (error) {
     if (error.message === "INVALID_INVITE") message.textContent = "초대 코드가 올바르지 않거나 만료되었습니다.";
     else if (error.message === "EMAIL_CONFIRMATION_ENABLED") message.textContent = "서버의 이메일 확인 설정을 점검해주세요.";
@@ -1269,7 +1453,7 @@ loginForm.addEventListener("submit", async event => {
     const account = await loadServerAccount(data.user);
     message.textContent = "";
     loginForm.reset();
-    unlockApp(account);
+    await unlockApp(account);
   } catch (error) {
     if (error.message === "ACCOUNT_SUSPENDED") message.textContent = "사용이 정지된 계정입니다. 팀 호스트에게 문의해주세요.";
     else message.textContent = "아이디 또는 비밀번호를 확인해주세요.";
@@ -1283,6 +1467,8 @@ loginForm.addEventListener("submit", async event => {
 const teamAccessModal = document.querySelector("#teamAccessModal");
 const teamAccessBackdrop = document.querySelector("#teamAccessBackdrop");
 const roleLabels = { host: "호스트", admin: "관리자", manager: "매니저", scorer: "기록원", member: "선수" };
+function managedTeamKey() { return document.querySelector("#teamPageSelect")?.value || selectedAccountTeamKey(); }
+function managedTeamId() { return signedInAccount?.teamIds?.[managedTeamKey()] || selectedAccountTeamId(); }
 
 function closeTeamAccess() {
   teamAccessModal.hidden = true;
@@ -1293,9 +1479,11 @@ function closeTeamAccess() {
 async function renderTeamMembers() {
   const list = document.querySelector("#memberAdminList");
   list.innerHTML = '<p class="poll-empty">팀원 정보를 불러오는 중입니다.</p>';
-  const { data, error } = await supabaseClient.rpc("list_team_members");
+  const teamId = managedTeamId();
+  if (!teamId) { list.innerHTML = '<p class="poll-empty">먼저 팀 방을 만들어주세요.</p>'; return; }
+  const { data, error } = await supabaseClient.rpc("list_team_members", { p_team_id: teamId });
   if (error) { list.innerHTML = '<p class="poll-empty">팀원 정보를 불러오지 못했습니다.</p>'; return; }
-  const myRole = signedInAccount?.teamRoles?.bbat;
+  const myRole = signedInAccount?.teamRoles?.[managedTeamKey()];
   const canEdit = ["host", "admin"].includes(myRole);
   list.innerHTML = data.map(member => {
     const protectedAccount = member.role === "host" || member.user_id === signedInAccount.id;
@@ -1310,6 +1498,8 @@ async function openTeamAccess() {
   teamAccessBackdrop.hidden = false;
   document.body.style.overflow = "hidden";
   document.querySelector("#inviteResult").hidden = true;
+  const team = teams[managedTeamKey()];
+  teamAccessModal.querySelector("header p").textContent = `${team?.name || "팀"} HOST`;
   await renderTeamMembers();
 }
 
@@ -1322,6 +1512,7 @@ document.querySelector("#createInviteButton").addEventListener("click", async ev
   button.disabled = true;
   try {
     const { data, error } = await supabaseClient.rpc("create_team_invite", {
+      p_team_id: managedTeamId(),
       p_role: document.querySelector("#inviteRole").value,
       p_expires_days: 30,
       p_max_uses: Number(document.querySelector("#inviteUses").value) || 1,
@@ -1346,7 +1537,7 @@ document.querySelector("#memberAdminList").addEventListener("change", async even
   const select = event.target.closest("[data-member-role]");
   if (!select) return;
   const row = select.closest("[data-member-id]");
-  const { error } = await supabaseClient.rpc("set_team_member_role", { p_user_id: row.dataset.memberId, p_role: select.value });
+  const { error } = await supabaseClient.rpc("set_team_member_role", { p_team_id: managedTeamId(), p_user_id: row.dataset.memberId, p_role: select.value });
   if (error) {
     showToast(error.message?.includes("MAX_EDITORS_REACHED")
       ? "수정 권한은 팀 방마다 최대 5명까지 지정할 수 있습니다."
@@ -1359,7 +1550,7 @@ document.querySelector("#memberAdminList").addEventListener("click", async event
   if (!button) return;
   const row = button.closest("[data-member-id]");
   const nextStatus = row.classList.contains("is-suspended") ? "active" : "suspended";
-  const { error } = await supabaseClient.rpc("set_team_member_status", { p_user_id: row.dataset.memberId, p_status: nextStatus });
+  const { error } = await supabaseClient.rpc("set_team_member_status", { p_team_id: managedTeamId(), p_user_id: row.dataset.memberId, p_status: nextStatus });
   if (error) showToast("계정 상태를 변경하지 못했습니다."); else showToast(nextStatus === "active" ? "계정 사용을 재개했습니다." : "계정 사용을 정지했습니다.");
   await renderTeamMembers();
 });

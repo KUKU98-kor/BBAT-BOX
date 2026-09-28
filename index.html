@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="styles.css?v=10" />
+    <link rel="stylesheet" href="styles.css?v=11" />
   </head>
   <body class="auth-locked">
     <section class="auth-gate" id="authGate" aria-labelledby="authTitle">
@@ -49,6 +49,19 @@
           <button class="auth-switch" id="authSwitch" type="button">회원이 아니신가요? <b>회원가입</b></button>
           <small class="auth-demo-note">계정과 팀 권한은 BBAT BOX 서버에 안전하게 저장됩니다.</small>
         </div>
+      </div>
+    </section>
+    <section class="team-setup-gate" id="teamSetupGate" aria-labelledby="teamSetupTitle" hidden>
+      <div class="team-setup-card">
+        <div class="team-setup-mark"><img src="assets/bbat-box-logo.png" alt="" /><span>새 팀 박스</span></div>
+        <div class="team-setup-copy"><p>첫 번째 팀을 시작하세요</p><h1 id="teamSetupTitle">기록을 담을 팀 방 만들기</h1><span>팀 이름만 정하면 빈 선수 명단과 관리 공간이 만들어집니다. 팀원 초대와 선수 직접 등록은 방을 만든 뒤 진행할 수 있습니다.</span></div>
+        <form id="teamSetupForm">
+          <label for="teamSetupName">팀 이름</label>
+          <input id="teamSetupName" maxlength="40" required placeholder="예: 배트조짐" />
+          <p class="auth-message" id="teamSetupMessage" role="alert"></p>
+          <button class="auth-submit" type="submit">팀 방 만들기</button>
+        </form>
+        <button class="team-setup-logout" id="teamSetupLogout" type="button">다른 계정으로 로그인</button>
       </div>
     </section>
     <a class="skip-link" href="#appMain">본문으로 건너뛰기</a>
@@ -213,7 +226,7 @@
       <form id="scheduleForm"><input id="scheduleOriginalDateInput" type="hidden" /><div class="form-grid"><label>팀<select id="scheduleTeamInput"><option value="bbat">배트조짐</option><option value="braves">브레이브스</option></select></label><label>리그<select id="scheduleLeagueInput"></select></label><label>날짜<input id="scheduleDateInput" type="date" required /></label><label>시간<input id="scheduleTimeInput" type="time" required /></label><label>상대 팀<input id="scheduleOpponentInput" required /></label><label>경기장<input id="scheduleVenueInput" required /></label></div><p class="schedule-permission-note">저장한 일정마다 참가 투표가 열리며 경기 7일 전 자동 마감됩니다. 7일 안에 들어온 경기는 ‘다음 경기’와 라인업에 표시됩니다.</p><div class="form-actions"><button class="outline-action" id="cancelScheduleEdit" type="button">취소</button><button class="primary-action" type="submit">일정 저장</button></div></form>
     </section>
     <div class="modal-backdrop" id="playerBackdrop" hidden></div>
-    <section class="schedule-modal" id="playerModal" role="dialog" aria-modal="true" aria-labelledby="playerModalTitle" hidden><header><div><p>팀 관리자 전용</p><h2 id="playerModalTitle">선수 추가</h2></div><button id="closePlayerModal" type="button" aria-label="선수 추가 닫기">×</button></header><form id="playerForm"><div class="form-grid"><label>이름<input id="newPlayerName" required /></label><label>등번호<input id="newPlayerNumber" inputmode="numeric" maxlength="3" required /></label><label>주 포지션<select id="newPlayerPosition"><option>CF</option><option>SS</option><option>2B</option><option>1B</option><option>C</option><option>SP</option><option>RP</option></select></label><label>가능 포지션<input id="newPlayerPositions" placeholder="예: CF, LF, 1B" required /></label><label>투구<select id="newPlayerThrows"><option>우투</option><option>좌투</option></select></label><label>타격<select id="newPlayerBats"><option>우타</option><option>좌타</option><option>양타</option></select></label></div><p class="schedule-permission-note">추가한 선수는 선수단과 리그 기록 선수명단에 동시에 반영됩니다.</p><div class="form-actions"><button class="outline-action" id="cancelPlayerAdd" type="button">취소</button><button class="primary-action" type="submit">선수 추가</button></div></form></section>
+    <section class="schedule-modal" id="playerModal" role="dialog" aria-modal="true" aria-labelledby="playerModalTitle" hidden><header><div><p>팀 관리자 전용</p><h2 id="playerModalTitle">명단 전용 선수 추가</h2></div><button id="closePlayerModal" type="button" aria-label="선수 추가 닫기">×</button></header><form id="playerForm"><div class="form-grid"><label>이름<input id="newPlayerName" required /></label><label>등번호<input id="newPlayerNumber" inputmode="numeric" maxlength="3" required /></label><label>주 포지션<select id="newPlayerPosition"><option>CF</option><option>SS</option><option>2B</option><option>3B</option><option>1B</option><option>C</option><option>LF</option><option>RF</option><option>SP</option><option>RP</option><option>DH</option></select></label><label>가능 포지션<input id="newPlayerPositions" placeholder="예: CF, LF, 1B" required /></label><label>투구<select id="newPlayerThrows"><option>우투</option><option>좌투</option></select></label><label>타격<select id="newPlayerBats"><option>우타</option><option>좌타</option><option>양타</option></select></label></div><p class="schedule-permission-note">앱 계정이 없는 선수도 이름과 포지션으로 등록할 수 있습니다. 추가 즉시 선수단과 경기 기록 명단에 반영됩니다.</p><div class="form-actions"><button class="outline-action" id="cancelPlayerAdd" type="button">취소</button><button class="primary-action" type="submit">명단에 추가</button></div></form></section>
     <div class="modal-backdrop" id="lineupBackdrop" hidden></div>
     <section class="lineup-modal" id="lineupModal" role="dialog" aria-modal="true" aria-labelledby="lineupModalTitle" hidden><header><div><p id="lineupGameLabel">다가오는 경기</p><h2 id="lineupModalTitle">라인업</h2></div><button id="closeLineupModal" type="button" aria-label="라인업 닫기">×</button></header><div class="lineup-participants"><span>참가명단</span><div id="lineupParticipants"></div><div class="manual-participant"><label>마감 후 참가자 추가<select id="manualParticipantSelect" aria-label="관리자가 추가할 참가자"></select></label><button id="addManualParticipant" type="button">참가 등록</button></div></div><form id="lineupForm"><section class="lineup-pitcher"><strong>선발투수</strong><label>선수<select id="lineupPitcherSelect"></select></label></section><section class="lineup-relievers"><div class="reliever-head"><div><strong>구원투수 예정</strong><span>2명부터 최대 4명까지 지정</span></div><button id="addRelieverButton" type="button">+ 구원투수</button></div><div id="lineupRelieverList"></div></section><div class="lineup-section-title"><strong>타순</strong><span>1번부터 9번까지 선수와 실제 수비 위치를 지정하세요.</span></div><div class="lineup-order" id="lineupOrder"></div><section class="lineup-bench"><div class="lineup-section-title"><strong>후보 명단</strong><span>참가자 중 라인업에 포함되지 않은 선수</span></div><div id="lineupBenchList"></div></section><div class="form-actions"><button class="outline-action" id="cancelLineup" type="button">취소</button><button class="primary-action" type="submit">라인업 저장</button></div></form></section>
     <div class="modal-backdrop" id="modalBackdrop" hidden></div>
@@ -231,6 +244,6 @@
       <p class="schedule-permission-note">비밀번호 원문은 누구에게도 표시되지 않습니다. 계정 권한 변경과 사용 정지는 서버에서 즉시 적용됩니다.</p>
     </section>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="supabase-config.js?v=1"></script><script src="app.js?v=10"></script><script src="scorebook.js?v=8"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="supabase-config.js?v=1"></script><script src="app.js?v=11"></script><script src="scorebook.js?v=9"></script>
   </body>
 </html>
