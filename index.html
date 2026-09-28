@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="styles.css?v=11" />
+    <link rel="stylesheet" href="styles.css?v=13" />
   </head>
   <body class="auth-locked">
     <section class="auth-gate" id="authGate" aria-labelledby="authTitle">
@@ -30,8 +30,6 @@
             <button class="auth-submit" type="submit">로그인</button>
           </form>
           <form class="auth-form" id="signupForm" hidden>
-            <label for="signupName">이름</label>
-            <input id="signupName" autocomplete="name" maxlength="20" required placeholder="실제 이름" />
             <label for="signupId">아이디</label>
             <div class="username-field"><input id="signupId" autocomplete="username" minlength="3" maxlength="20" pattern="[A-Za-z0-9_]+" required placeholder="영문·숫자 3자리 이상" /><button id="checkUsernameButton" type="button">중복 확인</button></div>
             <p class="id-check-message" id="idCheckMessage" aria-live="polite">영문, 숫자, 밑줄만 사용할 수 있어요.</p>
@@ -41,14 +39,31 @@
             <div class="password-field"><input id="signupPasswordConfirm" type="password" autocomplete="new-password" minlength="6" required placeholder="비밀번호 다시 입력" /><button type="button" data-password-toggle="signupPasswordConfirm" aria-label="비밀번호 확인 보기">보기</button></div>
             <label for="signupNickname">닉네임</label>
             <input id="signupNickname" maxlength="16" required placeholder="팀원에게 보일 이름" />
-            <label for="signupInviteCode">팀 초대 코드</label>
-            <input id="signupInviteCode" maxlength="32" required autocomplete="off" placeholder="관리자에게 받은 초대 코드" />
             <p class="auth-message" id="signupMessage" role="alert"></p>
             <button class="auth-submit" type="submit">계정 만들기</button>
           </form>
           <button class="auth-switch" id="authSwitch" type="button">회원이 아니신가요? <b>회원가입</b></button>
           <small class="auth-demo-note">계정과 팀 권한은 BBAT BOX 서버에 안전하게 저장됩니다.</small>
         </div>
+      </div>
+    </section>
+    <section class="profile-setup-gate" id="profileSetupGate" aria-labelledby="profileSetupTitle" hidden>
+      <div class="profile-setup-shell">
+        <div class="profile-setup-intro"><img src="assets/bbat-box-logo.png" alt="" /><p>선수 카드 만들기</p><h1 id="profileSetupTitle">내 정보를 입력해주세요</h1><span>팀에 들어가기 전, 기록과 라인업에 사용할 기본 선수 정보입니다. 나중에 프로필에서 변경할 수 있습니다.</span></div>
+        <form id="profileSetupForm">
+          <div class="profile-setup-grid">
+            <label>이름<input id="setupFullName" maxlength="20" autocomplete="name" required placeholder="실제 이름" /></label>
+            <label>닉네임<input id="setupNickname" maxlength="16" required placeholder="프로필에 표시할 이름" /></label>
+            <label>생년월일<input id="setupBirthDate" type="date" required /></label>
+            <label>희망 등번호<input id="setupNumber" inputmode="numeric" maxlength="3" pattern="[0-9]{1,3}" required placeholder="예: 23" /></label>
+            <label>야구 경력<input id="setupExperience" type="number" min="0" max="60" required placeholder="0" /><span>년</span></label>
+          </div>
+          <fieldset class="position-choice"><legend>희망 포지션 <small>여러 개 선택 가능</small></legend><div><label><input type="checkbox" name="setupPosition" value="P" />투수</label><label><input type="checkbox" name="setupPosition" value="C" />포수</label><label><input type="checkbox" name="setupPosition" value="1B" />1루수</label><label><input type="checkbox" name="setupPosition" value="2B" />2루수</label><label><input type="checkbox" name="setupPosition" value="3B" />3루수</label><label><input type="checkbox" name="setupPosition" value="SS" />유격수</label><label><input type="checkbox" name="setupPosition" value="LF" />좌익수</label><label><input type="checkbox" name="setupPosition" value="CF" />중견수</label><label><input type="checkbox" name="setupPosition" value="RF" />우익수</label><label><input type="checkbox" name="setupPosition" value="DH" />지명타자</label></div></fieldset>
+          <fieldset class="former-player-choice"><legend>선수 출신 여부</legend><label><input type="radio" name="setupFormerPlayer" value="false" checked />비선출</label><label><input type="radio" name="setupFormerPlayer" value="true" />선출</label></fieldset>
+          <p class="auth-message" id="profileSetupMessage" role="alert"></p>
+          <button class="auth-submit" type="submit">내 정보 저장하고 시작하기</button>
+        </form>
+        <button class="team-setup-logout" id="profileSetupLogout" type="button">다른 계정으로 로그인</button>
       </div>
     </section>
     <section class="team-setup-gate" id="teamSetupGate" aria-labelledby="teamSetupTitle" hidden>
@@ -61,9 +76,10 @@
           <p class="auth-message" id="teamSetupMessage" role="alert"></p>
           <button class="auth-submit" type="submit">팀 방 만들기</button>
         </form>
-        <button class="team-setup-logout" id="teamSetupLogout" type="button">다른 계정으로 로그인</button>
+        <button class="team-setup-logout" id="teamSetupClose" type="button">나중에 만들기</button>
       </div>
     </section>
+    <section class="team-setup-gate" id="teamJoinGate" aria-labelledby="teamJoinTitle" hidden><div class="team-setup-card"><div class="team-setup-mark"><img src="assets/bbat-box-logo.png" alt="" /><span>팀 참여</span></div><div class="team-setup-copy"><p>초대받은 팀이 있나요?</p><h1 id="teamJoinTitle">참여코드 입력</h1><span>팀 관리자에게 받은 참여코드를 입력하면 팀 정보와 선수 명단이 연결됩니다.</span></div><form id="teamJoinForm"><label for="teamJoinCode">참여코드</label><input id="teamJoinCode" maxlength="32" required autocomplete="off" placeholder="BBAT-..." /><p class="auth-message" id="teamJoinMessage" role="alert"></p><button class="auth-submit" type="submit">팀 참여하기</button></form><button class="team-setup-logout" id="teamJoinClose" type="button">취소</button></div></section>
     <a class="skip-link" href="#appMain">본문으로 건너뛰기</a>
     <header class="app-header">
       <button class="wordmark" type="button" data-go="home" aria-label="BBAT BOX 홈"><img class="brand-logo" src="assets/bbat-box-logo.png" alt="" /><span>BBAT BOX</span></button>
@@ -72,7 +88,7 @@
 
     <main id="appMain" class="app-main">
       <section class="app-screen is-active" id="screen-home" data-screen="home" aria-labelledby="homeTitle">
-        <div class="page-intro"><div><p class="date-line">2026 시즌 · 9월 18일</p><h1 id="homeTitle">MY BOX</h1></div><label class="team-select-wrap">팀 선택<select id="homeTeamSelect" aria-label="홈 화면 팀 선택"><option value="bbat">배트조짐</option><option value="braves">브레이브스</option><option value="solo">개인 기록</option></select></label></div>
+        <div class="page-intro"><div><p class="date-line" id="homeDateLine">오늘</p><h1 id="homeTitle">MY BOX</h1></div><label class="team-select-wrap" id="homeTeamSelectWrap">팀 선택<select id="homeTeamSelect" aria-label="홈 화면 팀 선택"><option value="bbat">배트조짐</option><option value="braves">브레이브스</option><option value="solo">개인 기록</option></select></label></div>
         <div class="home-layout">
           <div class="profile-column">
             <article class="team-info-card" aria-label="선택한 팀 정보">
@@ -81,10 +97,11 @@
               <div class="team-info-main"><span class="profile-team-crest" id="profileTeamInitial">B</span><div><p>현재 소속 팀</p><h2 id="profileTeam">배트조짐</h2><span id="profileRole">선수 · 기록원</span></div></div>
               <div class="team-info-foot"><span id="profileLeague">서울 일요리그</span><b id="profileTeamStanding">A조 3위</b></div>
             </article>
+            <article class="no-team-card" id="noTeamCard" hidden><div class="empty-dugout-mark" aria-hidden="true">＋</div><p>아직 소속된 팀이 없습니다</p><h2>팀 기록을 시작할 준비가 됐어요</h2><span>새 팀을 만들거나 관리자에게 받은 참여코드로 팀에 들어가세요.</span><div><button class="primary-action" id="openTeamCreate" type="button">팀 만들기</button><button class="outline-action" id="openTeamJoin" type="button">참여코드 입력</button></div></article>
             <article class="player-card" aria-label="내 프로필">
               <div class="player-card-top"><span>내 프로필</span></div>
               <div class="player-identity"><div class="profile-photo" aria-hidden="true"><img class="profile-photo-image" alt="" /><svg viewBox="0 0 80 96"><circle cx="40" cy="30" r="17"/><path d="M13 90c2-24 10-37 27-37s25 13 27 37"/><path d="M20 65c12 8 28 8 40 0"/></svg><span>PROFILE</span></div><div><p>PLAYER</p><div class="profile-name-line"><h2 id="profileDisplayName">이도윤</h2><strong id="profileNumber">N.23</strong></div><span class="profile-nickname" id="profileNickname">닉네임</span><div class="position-row"><span id="profilePosition">CF</span><span id="profileBats">우투우타</span></div></div></div>
-              <dl class="profile-details"><div><dt>소속</dt><dd id="profileTeamShort">배트조짐</dd></div><div><dt>가입일</dt><dd>2024.03</dd></div><div><dt>출전</dt><dd id="profileGames">18경기</dd></div></dl>
+              <dl class="profile-details"><div><dt>소속</dt><dd id="profileTeamShort">미소속</dd></div><div><dt>가입일</dt><dd id="profileJoinedAt">-</dd></div><div><dt>출전</dt><dd id="profileGames">0경기</dd></div></dl>
               <button class="profile-card-hit" id="openProfileEditor" type="button" aria-label="내 프로필 수정하기"></button>
             </article>
           </div>
@@ -230,7 +247,7 @@
     <div class="modal-backdrop" id="lineupBackdrop" hidden></div>
     <section class="lineup-modal" id="lineupModal" role="dialog" aria-modal="true" aria-labelledby="lineupModalTitle" hidden><header><div><p id="lineupGameLabel">다가오는 경기</p><h2 id="lineupModalTitle">라인업</h2></div><button id="closeLineupModal" type="button" aria-label="라인업 닫기">×</button></header><div class="lineup-participants"><span>참가명단</span><div id="lineupParticipants"></div><div class="manual-participant"><label>마감 후 참가자 추가<select id="manualParticipantSelect" aria-label="관리자가 추가할 참가자"></select></label><button id="addManualParticipant" type="button">참가 등록</button></div></div><form id="lineupForm"><section class="lineup-pitcher"><strong>선발투수</strong><label>선수<select id="lineupPitcherSelect"></select></label></section><section class="lineup-relievers"><div class="reliever-head"><div><strong>구원투수 예정</strong><span>2명부터 최대 4명까지 지정</span></div><button id="addRelieverButton" type="button">+ 구원투수</button></div><div id="lineupRelieverList"></div></section><div class="lineup-section-title"><strong>타순</strong><span>1번부터 9번까지 선수와 실제 수비 위치를 지정하세요.</span></div><div class="lineup-order" id="lineupOrder"></div><section class="lineup-bench"><div class="lineup-section-title"><strong>후보 명단</strong><span>참가자 중 라인업에 포함되지 않은 선수</span></div><div id="lineupBenchList"></div></section><div class="form-actions"><button class="outline-action" id="cancelLineup" type="button">취소</button><button class="primary-action" type="submit">라인업 저장</button></div></form></section>
     <div class="modal-backdrop" id="modalBackdrop" hidden></div>
-    <aside class="settings-sheet" id="settingsSheet" role="dialog" aria-modal="true" aria-labelledby="settingsTitle" hidden><header><div><p>내 계정</p><h2 id="settingsTitle">설정</h2></div><button id="closeSettings" type="button" aria-label="설정 닫기">×</button></header><div class="settings-user"><div class="mini-avatar large"><span>23</span></div><div><strong id="settingsAccountName">이도윤</strong><small id="settingsAccountMeta">kuku98 · 선수 / 기록원</small></div></div><button class="setting-row" type="button"><span>프로필 수정</span><b>›</b></button><button class="setting-row" type="button"><span>알림 설정</span><b>›</b></button><button class="setting-row" id="teamAccessButton" type="button" hidden><span>팀원·초대 관리</span><b>›</b></button><button class="setting-row" type="button"><span>개인정보 및 보안</span><b>›</b></button><button class="setting-row logout-row" id="logoutButton" type="button"><span>로그아웃</span><b>나가기</b></button></aside>
+    <aside class="settings-sheet" id="settingsSheet" role="dialog" aria-modal="true" aria-labelledby="settingsTitle" hidden><header><div><p>내 계정</p><h2 id="settingsTitle">설정</h2></div><button id="closeSettings" type="button" aria-label="설정 닫기">×</button></header><div class="settings-user"><div class="mini-avatar large"><span>23</span></div><div><strong id="settingsAccountName">이도윤</strong><small id="settingsAccountMeta">kuku98 · 선수 / 기록원</small></div></div><button class="setting-row" id="settingsProfileButton" type="button"><span>내 프로필 수정</span><b>›</b></button><button class="setting-row" type="button"><span>알림 설정</span><b>›</b></button><button class="setting-row" id="teamAccessButton" type="button" hidden><span>팀원·초대 관리</span><b>›</b></button><button class="setting-row" type="button"><span>개인정보 및 보안</span><b>›</b></button><button class="setting-row logout-row" id="logoutButton" type="button"><span>로그아웃</span><b>나가기</b></button></aside>
     <div class="modal-backdrop" id="teamAccessBackdrop" hidden></div>
     <section class="schedule-modal account-admin-modal" id="teamAccessModal" role="dialog" aria-modal="true" aria-labelledby="teamAccessTitle" hidden>
       <header><div><p>배트조짐 HOST</p><h2 id="teamAccessTitle">팀원·초대 관리</h2></div><button id="closeTeamAccess" type="button" aria-label="팀원 관리 닫기">×</button></header>
@@ -244,6 +261,6 @@
       <p class="schedule-permission-note">비밀번호 원문은 누구에게도 표시되지 않습니다. 계정 권한 변경과 사용 정지는 서버에서 즉시 적용됩니다.</p>
     </section>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="supabase-config.js?v=1"></script><script src="app.js?v=11"></script><script src="scorebook.js?v=9"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="supabase-config.js?v=1"></script><script src="app.js?v=13"></script><script src="scorebook.js?v=9"></script>
   </body>
 </html>
