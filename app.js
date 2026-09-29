@@ -364,6 +364,7 @@ function renderTeamPage(key, requestedLeagueId) {
   document.querySelector("#teamManager").textContent = team.managerName || "미설정";
   document.querySelector("#teamHomeField").textContent = team.homeField || "미설정";
   document.querySelector("#teamPrimaryLeagues").textContent = team.primaryLeagues?.length ? team.primaryLeagues.join(" · ") : "미설정";
+  document.querySelector("#teamDescription").textContent = team.description || "팀 소개를 등록해주세요.";
   document.querySelector("#addPlayerButton").hidden = !canManageRoster;
   document.querySelector("#openTeamScheduleEditor").hidden = !canManageRoster;
   document.querySelector("#teamLeagueLabel").textContent = league.name;
