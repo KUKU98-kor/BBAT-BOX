@@ -111,6 +111,9 @@ const positionLabels = {
 };
 let savedProfilePhoto = localStorage.getItem("bbat-box-profile-photo") || "";
 let draftProfilePhoto = savedProfilePhoto;
+let draftTeamImageFile = null;
+let draftTeamImageObjectUrl = "";
+let removeTeamImageRequested = false;
 let signedInAccount = null;
 const backendConfig = window.BBAT_SUPABASE || {};
 const supabaseClient = window.supabase?.createClient?.(backendConfig.url, backendConfig.publishableKey, {
@@ -178,6 +181,10 @@ function renderHomeTeam(key) {
   const logoImage = document.querySelector("#teamLogoWatermarkImage");
   teamCard.style.setProperty("--team-logo-start", team.logoColors[0]);
   teamCard.style.setProperty("--team-logo-end", team.logoColors[1]);
+  teamCard.classList.toggle("has-team-image", Boolean(team.logo));
+  teamCard.style.backgroundImage = team.logo
+    ? `linear-gradient(105deg, rgba(5,29,34,.94) 0%, rgba(5,29,34,.78) 48%, rgba(5,29,34,.48) 100%), url("${team.logo}")`
+    : "";
   document.querySelector("#teamLogoWatermark").textContent = team.initial;
   logoImage.hidden = !team.logo;
   logoImage.src = team.logo || "";
@@ -185,7 +192,9 @@ function renderHomeTeam(key) {
   document.querySelector("#headerTeam").textContent = team.header;
   document.querySelector("#headerNumber").textContent = team.number;
   document.querySelector("#profileTeam").textContent = team.name;
-  document.querySelector("#profileTeamInitial").textContent = team.initial;
+  const homeCrest = document.querySelector("#profileTeamInitial");
+  homeCrest.textContent = team.logo ? "" : team.initial;
+  homeCrest.style.backgroundImage = team.logo ? `url("${team.logo}")` : "";
   document.querySelector("#profileRole").textContent = team.role;
   document.querySelector("#profileLeague").textContent = team.league;
   document.querySelector("#profileTeamStanding").textContent = team.region || team.standing;
@@ -354,7 +363,11 @@ function renderTeamPage(key, requestedLeagueId) {
   const league = getLeague(key, leagueId);
   const game = getNextWeekGame(key, leagueId);
   document.querySelector("#teamPageSelect").value = key;
-  document.querySelector("#teamPageCrest").childNodes[0].nodeValue = team.initial;
+  const teamPageLogo = document.querySelector("#teamPageLogo");
+  teamPageLogo.hidden = !team.logo;
+  teamPageLogo.src = team.logo || "";
+  document.querySelector("#teamPageInitial").hidden = Boolean(team.logo);
+  document.querySelector("#teamPageInitial").textContent = team.initial;
   document.querySelector("#teamMyNumber").textContent = team.number;
   document.querySelector("#teamName").textContent = team.name;
   document.querySelector("#teamMeta").textContent = team.teamMeta.split(" · ").slice(0, 2).join(" · ");
@@ -1133,16 +1146,22 @@ function placeholderGame() {
   return { date: toDateKey(date), time: "09:00", opponent: "상대팀 미정", venue: "경기장 미정" };
 }
 
+function teamImageUrl(path, updatedAt) {
+  if (!path || !supabaseClient) return "";
+  const { data } = supabaseClient.storage.from("team-assets").getPublicUrl(path);
+  return data?.publicUrl ? `${data.publicUrl}?v=${encodeURIComponent(updatedAt || "1")}` : "";
+}
+
 function ensureClientTeam(team) {
   const key = team.slug;
   const primaryLeagues = (team.primaryLeagues || []).filter(Boolean).slice(0, 2);
   const foundedLabel = team.foundedYear ? `${team.foundedYear}년 창단` : "창단연도 미설정";
   teams[key] = {
     name: team.name, header: `${team.name} · 포지션 미정`, role: "선수", position: "미정", bats: "우투우타", games: "0경기",
-    number: "-", initial: team.name.trim().slice(0, 1) || "B", logo: "", logoColors: ["#0b3539", "#147565"], league: primaryLeagues.join(" · ") || "리그 미설정", standing: "시즌 준비 중",
+    number: "-", initial: team.name.trim().slice(0, 1) || "B", logo: teamImageUrl(team.teamImagePath, team.updatedAt), logoColors: ["#0b3539", "#147565"], league: primaryLeagues.join(" · ") || "리그 미설정", standing: "시즌 준비 중",
     title: `${team.name}에서의 시즌`, trend: "첫 기록을 기다리고 있어요", summary: "0경기 · 0타석",
     stats: [["타율", ".000"], ["타점", "0"], ["OPS", ".000"]], teamMeta: `${foundedLabel} · 선수 0명`, wins: "0승 0패", rank: "-",
-    region: team.region || "", primaryLeagues, managerName: team.managerName || "", foundedYear: team.foundedYear || "", homeField: team.homeField || "", description: team.description || ""
+    region: team.region || "", primaryLeagues, managerName: team.managerName || "", foundedYear: team.foundedYear || "", homeField: team.homeField || "", description: team.description || "", teamImagePath: team.teamImagePath || "", updatedAt: team.updatedAt || ""
   };
   teamLeagues[key] = teamLeagues[key] || [{ id: `${key}-league`, name: "리그 미설정", season: "첫 시즌", record: "0승 0패", rank: "-", nextGame: placeholderGame() }];
   rosters[key] = rosters[key] || { staff: [], players: [] };
@@ -1382,6 +1401,21 @@ function selectedTeamProfileKey(source = "home") {
   return source === "team" ? document.querySelector("#teamPageSelect").value : document.querySelector("#homeTeamSelect").value;
 }
 
+function clearTeamImageObjectUrl() {
+  if (draftTeamImageObjectUrl) URL.revokeObjectURL(draftTeamImageObjectUrl);
+  draftTeamImageObjectUrl = "";
+}
+
+function renderTeamImagePreview(source, initial) {
+  const image = document.querySelector("#teamImagePreviewPhoto");
+  const fallback = document.querySelector("#teamImagePreviewInitial");
+  image.hidden = !source;
+  image.src = source || "";
+  fallback.hidden = Boolean(source);
+  fallback.textContent = initial || "B";
+  document.querySelector("#removeTeamImage").disabled = !source;
+}
+
 function openTeamProfileEditor(teamKey = selectedTeamProfileKey()) {
   if (!teamKey || !canEditTeamProfile(teamKey)) {
     showToast("팀 정보는 호스트와 관리자만 수정할 수 있습니다.");
@@ -1393,8 +1427,13 @@ function openTeamProfileEditor(teamKey = selectedTeamProfileKey()) {
     showToast("팀 정보를 불러오지 못했습니다.");
     return;
   }
+  clearTeamImageObjectUrl();
+  draftTeamImageFile = null;
+  removeTeamImageRequested = false;
+  document.querySelector("#teamImageInput").value = "";
   document.querySelector("#teamProfileId").value = serverTeam.id;
   document.querySelector("#teamProfileCrest").textContent = team.initial;
+  renderTeamImagePreview(team.logo, team.initial);
   document.querySelector("#teamProfileName").value = team.name;
   document.querySelector("#teamProfileRegion").value = team.region || "";
   document.querySelector("#teamProfileLeague1").value = team.primaryLeagues?.[0] || "";
@@ -1410,6 +1449,9 @@ function openTeamProfileEditor(teamKey = selectedTeamProfileKey()) {
 }
 
 function closeTeamProfileEditor() {
+  clearTeamImageObjectUrl();
+  draftTeamImageFile = null;
+  removeTeamImageRequested = false;
   document.querySelector("#teamProfileGate").hidden = true;
 }
 
@@ -1544,6 +1586,34 @@ document.querySelector("#cancelTeamProfile").addEventListener("click", closeTeam
 document.querySelector("#teamProfileDescription").addEventListener("input", event => {
   document.querySelector("#teamDescriptionCount").textContent = String(event.target.value.length);
 });
+document.querySelector("#teamImageInput").addEventListener("change", event => {
+  const file = event.target.files?.[0];
+  const message = document.querySelector("#teamProfileMessage");
+  if (!file) return;
+  if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+    message.textContent = "JPG, PNG, WEBP 이미지만 등록할 수 있습니다.";
+    event.target.value = "";
+    return;
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    message.textContent = "이미지는 5MB 이하로 선택해주세요.";
+    event.target.value = "";
+    return;
+  }
+  clearTeamImageObjectUrl();
+  draftTeamImageFile = file;
+  removeTeamImageRequested = false;
+  draftTeamImageObjectUrl = URL.createObjectURL(file);
+  message.textContent = "";
+  renderTeamImagePreview(draftTeamImageObjectUrl, document.querySelector("#teamProfileCrest").textContent);
+});
+document.querySelector("#removeTeamImage").addEventListener("click", () => {
+  clearTeamImageObjectUrl();
+  draftTeamImageFile = null;
+  removeTeamImageRequested = true;
+  document.querySelector("#teamImageInput").value = "";
+  renderTeamImagePreview("", document.querySelector("#teamProfileCrest").textContent);
+});
 document.querySelector("#teamProfileForm").addEventListener("submit", async event => {
   event.preventDefault();
   const teamId = document.querySelector("#teamProfileId").value;
@@ -1554,6 +1624,18 @@ document.querySelector("#teamProfileForm").addEventListener("submit", async even
   button.textContent = "팀 정보 저장 중";
   message.textContent = "";
   try {
+    const teamKey = signedInAccount?.teamDetails?.find(item => item.id === teamId)?.slug;
+    const currentTeam = teamKey ? teams[teamKey] : null;
+    let teamImagePath = currentTeam?.teamImagePath || "";
+    if (draftTeamImageFile) {
+      teamImagePath = `${teamId}/team-image`;
+      const { error: uploadError } = await supabaseClient.storage.from("team-assets").upload(teamImagePath, draftTeamImageFile, {
+        upsert: true,
+        contentType: draftTeamImageFile.type,
+        cacheControl: "3600",
+      });
+      if (uploadError) throw uploadError;
+    } else if (removeTeamImageRequested) teamImagePath = "";
     const { error } = await supabaseClient.rpc("update_team_profile", {
       p_team_id: teamId,
       p_name: document.querySelector("#teamProfileName").value.trim(),
@@ -1563,6 +1645,7 @@ document.querySelector("#teamProfileForm").addEventListener("submit", async even
       p_founded_year: Number(document.querySelector("#teamProfileFoundedYear").value),
       p_home_field: document.querySelector("#teamProfileHomeField").value.trim(),
       p_description: document.querySelector("#teamProfileDescription").value.trim(),
+      p_team_image_path: teamImagePath,
     });
     if (error) throw error;
     const { data } = await supabaseClient.auth.getUser();
@@ -1571,7 +1654,7 @@ document.querySelector("#teamProfileForm").addEventListener("submit", async even
     await unlockApp(account);
     showToast("팀 정보를 저장했습니다.");
   } catch (error) {
-    message.textContent = error.message?.includes("NOT_AUTHORIZED") ? "팀 정보는 호스트와 관리자만 수정할 수 있습니다." : "팀 정보를 저장하지 못했습니다. 입력 내용을 확인해주세요.";
+    message.textContent = error.message?.includes("NOT_AUTHORIZED") ? "팀 정보는 호스트와 관리자만 수정할 수 있습니다." : "팀 정보나 이미지를 저장하지 못했습니다. 입력값과 이미지 크기를 확인해주세요.";
   } finally {
     button.disabled = false;
     button.textContent = "팀 정보 저장";
@@ -1581,7 +1664,7 @@ document.querySelector("#teamProfileForm").addEventListener("submit", async even
 async function loadServerAccount(user) {
   const [{ data: profile, error: profileError }, { data: memberships, error: membershipError }] = await Promise.all([
     supabaseClient.from("profiles").select("id,username,full_name,nickname,status,is_platform_host,must_change_password,created_at,birth_date,desired_positions,uniform_number,experience_years,is_former_player,profile_complete").eq("id", user.id).single(),
-    supabaseClient.from("team_members").select("role,status,team:teams(id,slug,name,setup_complete,region,primary_leagues,manager_name,founded_year,home_field,description)").eq("user_id", user.id),
+    supabaseClient.from("team_members").select("role,status,team:teams(id,slug,name,setup_complete,region,primary_leagues,manager_name,founded_year,home_field,description,team_image_path,updated_at)").eq("user_id", user.id),
   ]);
   if (profileError || membershipError || !profile) throw profileError || membershipError || new Error("PROFILE_NOT_FOUND");
   const activeMemberships = (memberships || []).filter(item => item.status === "active");
@@ -1594,7 +1677,7 @@ async function loadServerAccount(user) {
     if (!team?.slug) return;
     teamRoles[team.slug] = item.role;
     accountTeamSlugs.push(team.slug);
-    teamDetails.push({ id: team.id, slug: team.slug, name: team.name, setupComplete: team.setup_complete, role: item.role, region: team.region, primaryLeagues: team.primary_leagues || [], managerName: team.manager_name, foundedYear: team.founded_year, homeField: team.home_field, description: team.description });
+    teamDetails.push({ id: team.id, slug: team.slug, name: team.name, setupComplete: team.setup_complete, role: item.role, region: team.region, primaryLeagues: team.primary_leagues || [], managerName: team.manager_name, foundedYear: team.founded_year, homeField: team.home_field, description: team.description, teamImagePath: team.team_image_path, updatedAt: team.updated_at });
   });
   return { id: profile.id, username: profile.username, name: profile.full_name, nickname: profile.nickname, isPlatformHost: profile.is_platform_host, createdAt: profile.created_at, birthDate: profile.birth_date, desiredPositions: profile.desired_positions || [], uniformNumber: profile.uniform_number || "", experienceYears: profile.experience_years || 0, isFormerPlayer: profile.is_former_player, profileComplete: profile.profile_complete, mustChangePassword: profile.must_change_password, teamRoles, teams: accountTeamSlugs, teamDetails };
 }
