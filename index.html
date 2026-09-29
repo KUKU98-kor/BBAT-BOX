@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="styles.css?v=13" />
+    <link rel="stylesheet" href="styles.css?v=14" />
   </head>
   <body class="auth-locked">
     <section class="auth-gate" id="authGate" aria-labelledby="authTitle">
@@ -80,6 +80,26 @@
       </div>
     </section>
     <section class="team-setup-gate" id="teamJoinGate" aria-labelledby="teamJoinTitle" hidden><div class="team-setup-card"><div class="team-setup-mark"><img src="assets/bbat-box-logo.png" alt="" /><span>팀 참여</span></div><div class="team-setup-copy"><p>초대받은 팀이 있나요?</p><h1 id="teamJoinTitle">참여코드 입력</h1><span>팀 관리자에게 받은 참여코드를 입력하면 팀 정보와 선수 명단이 연결됩니다.</span></div><form id="teamJoinForm"><label for="teamJoinCode">참여코드</label><input id="teamJoinCode" maxlength="32" required autocomplete="off" placeholder="BBAT-..." /><p class="auth-message" id="teamJoinMessage" role="alert"></p><button class="auth-submit" type="submit">팀 참여하기</button></form><button class="team-setup-logout" id="teamJoinClose" type="button">취소</button></div></section>
+    <section class="profile-setup-gate team-profile-gate" id="teamProfileGate" aria-labelledby="teamProfileTitle" hidden>
+      <div class="profile-setup-shell team-profile-shell">
+        <div class="team-profile-heading"><span class="team-profile-crest" id="teamProfileCrest">B</span><div><p>팀 기본 정보</p><h1 id="teamProfileTitle">팀 정보 수정</h1><span>홈과 팀 관리 화면에서 팀원 모두가 함께 보는 정보입니다.</span></div></div>
+        <form id="teamProfileForm">
+          <input id="teamProfileId" type="hidden" />
+          <div class="profile-setup-grid team-profile-grid">
+            <label>팀 이름<input id="teamProfileName" maxlength="40" required /></label>
+            <label>활동 지역<input id="teamProfileRegion" maxlength="30" required placeholder="예: 서울 양천구" /></label>
+            <label>주 활동 리그 1<input id="teamProfileLeague1" maxlength="60" required placeholder="예: 서울 일요리그" /></label>
+            <label>주 활동 리그 2 <small>선택</small><input id="teamProfileLeague2" maxlength="60" placeholder="예: 한강 토요리그" /></label>
+            <label>감독<input id="teamProfileManager" maxlength="30" required placeholder="감독 이름" /></label>
+            <label>창단연도<input id="teamProfileFoundedYear" type="number" min="1900" max="2100" required /></label>
+            <label class="team-profile-wide">홈구장<input id="teamProfileHomeField" maxlength="80" required placeholder="주로 사용하는 야구장" /></label>
+            <label class="team-profile-wide">팀 소개<textarea id="teamProfileDescription" maxlength="300" rows="4" placeholder="팀의 성격, 활동 요일, 목표 등을 적어주세요."></textarea><span class="field-counter"><b id="teamDescriptionCount">0</b>/300</span></label>
+          </div>
+          <p class="auth-message" id="teamProfileMessage" role="alert"></p>
+          <div class="team-profile-actions"><button class="outline-action" id="cancelTeamProfile" type="button">취소</button><button class="primary-action" type="submit">팀 정보 저장</button></div>
+        </form>
+      </div>
+    </section>
     <a class="skip-link" href="#appMain">본문으로 건너뛰기</a>
     <header class="app-header">
       <button class="wordmark" type="button" data-go="home" aria-label="BBAT BOX 홈"><img class="brand-logo" src="assets/bbat-box-logo.png" alt="" /><span>BBAT BOX</span></button>
@@ -96,6 +116,7 @@
               <div class="card-label"><span>팀 정보</span><span class="season-chip">2026</span></div>
               <div class="team-info-main"><span class="profile-team-crest" id="profileTeamInitial">B</span><div><p>현재 소속 팀</p><h2 id="profileTeam">배트조짐</h2><span id="profileRole">선수 · 기록원</span></div></div>
               <div class="team-info-foot"><span id="profileLeague">서울 일요리그</span><b id="profileTeamStanding">A조 3위</b></div>
+              <button class="team-card-hit" id="openTeamProfile" type="button" aria-label="팀 정보 수정하기" hidden></button>
             </article>
             <article class="no-team-card" id="noTeamCard" hidden><div class="empty-dugout-mark" aria-hidden="true">＋</div><p>아직 소속된 팀이 없습니다</p><h2>팀 기록을 시작할 준비가 됐어요</h2><span>새 팀을 만들거나 관리자에게 받은 참여코드로 팀에 들어가세요.</span><div><button class="primary-action" id="openTeamCreate" type="button">팀 만들기</button><button class="outline-action" id="openTeamJoin" type="button">참여코드 입력</button></div></article>
             <article class="player-card" aria-label="내 프로필">
@@ -137,7 +158,8 @@
 
       <section class="app-screen" id="screen-team" data-screen="team" aria-labelledby="teamTitle" hidden>
         <div class="page-intro compact"><div><p class="date-line">팀 관리</p><h1 id="teamTitle">팀과 리그를 한눈에</h1></div><div class="team-filter-panel"><label class="team-select-wrap">팀 선택<select id="teamPageSelect" aria-label="관리할 팀 선택"><option value="bbat">배트조짐</option><option value="braves">브레이브스</option></select></label><label class="team-select-wrap">리그 선택<select id="teamLeagueSelect" aria-label="확인할 리그 선택"></select></label></div></div>
-        <section class="team-banner"><div class="team-crest" id="teamPageCrest">B<span id="teamMyNumber">23</span></div><div class="team-title"><span id="teamLeagueLabel">서울 일요리그</span><h2 id="teamName">배트조짐</h2><p id="teamMeta">2021년 창단 · 선수 24명</p><b class="host-badge" id="teamHostBadge" hidden>HOST · 내 팀</b></div><div class="team-record"><span id="teamSeasonLabel">2026 시즌</span><strong id="teamWins">12승 1무 5패</strong><small id="teamRank">A조 3위</small></div></section>
+        <section class="team-banner"><div class="team-crest" id="teamPageCrest">B<span id="teamMyNumber">23</span></div><div class="team-title"><span id="teamLeagueLabel">서울 일요리그</span><h2 id="teamName">배트조짐</h2><p id="teamMeta">2021년 창단 · 선수 24명</p><b class="host-badge" id="teamHostBadge" hidden>HOST · 내 팀</b><button class="team-banner-edit" id="openTeamProfileFromTeam" type="button" hidden>팀 정보 수정</button></div><div class="team-record"><span id="teamSeasonLabel">2026 시즌</span><strong id="teamWins">12승 1무 5패</strong><small id="teamRank">A조 3위</small></div></section>
+        <dl class="team-profile-facts"><div><dt>활동 지역</dt><dd id="teamRegion">미설정</dd></div><div><dt>감독</dt><dd id="teamManager">미설정</dd></div><div><dt>홈구장</dt><dd id="teamHomeField">미설정</dd></div><div><dt>주 활동 리그</dt><dd id="teamPrimaryLeagues">미설정</dd></div></dl>
         <div class="team-grid"><section class="roster-strip roster-preview"><div class="section-head"><div><p>등록 선수 미리보기</p><h2 id="rosterPreviewTitle">배트조짐 선수명단</h2></div><button class="text-button" id="openRosterManagement" type="button">선수단 보기</button></div><div class="staff-preview" id="teamStaffPreview"></div><div class="roster-preview-list" id="teamRosterPreview"></div></section><section class="next-game"><div class="section-head"><div><p id="nextGameLeague">서울 일요리그 · 다음 경기</p><h2 id="nextGameDate">9월 21일 · 일요일</h2></div><button class="schedule-sync" id="openTeamScheduleEditor" type="button">+ 일정 등록</button></div><div class="matchup" id="nextGameMatchup"><div><span class="small-crest home" id="nextGameHomeCrest">B</span><strong id="nextGameTeam">배트조짐</strong></div><span><b id="nextGameTime">09:00</b><small id="nextGameVenue">목동야구장 2구장</small></span><div><span class="small-crest away" id="nextGameAwayCrest">W</span><strong id="nextGameOpponent">웨일즈</strong></div></div><div class="next-game-actions lineup-direct-actions"><button class="primary-action" id="openLineupBuilder" type="button">라인업</button><button class="outline-action" type="button" data-go="calendar">전체 일정</button></div><p class="lineup-status" id="lineupStatus">다가오는 경기의 참가 응답을 바탕으로 라인업을 구성합니다.</p><div class="schedule-votes"><div class="schedule-votes-head"><strong>참가 투표</strong><span>경기 7일 전 자동 마감</span></div><div id="schedulePollList"></div></div></section></div>
         <section class="join-team"><div><span class="ticket-icon">#</span><div><strong>새 팀에 참가하기</strong><p>감독이나 팀 리더에게 받은 참가 코드를 입력하세요.</p></div></div><button class="primary-action" id="joinTeamButton" type="button">참가 코드 입력</button></section>
       </section>
@@ -261,6 +283,6 @@
       <p class="schedule-permission-note">비밀번호 원문은 누구에게도 표시되지 않습니다. 계정 권한 변경과 사용 정지는 서버에서 즉시 적용됩니다.</p>
     </section>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="supabase-config.js?v=1"></script><script src="app.js?v=13"></script><script src="scorebook.js?v=9"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="supabase-config.js?v=1"></script><script src="app.js?v=14"></script><script src="scorebook.js?v=9"></script>
   </body>
 </html>

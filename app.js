@@ -173,6 +173,7 @@ function showToast(message) {
 
 function renderHomeTeam(key) {
   const team = teams[key];
+  const canEditTeam = ["host", "admin"].includes(signedInAccount?.teamRoles?.[key]);
   const teamCard = document.querySelector(".team-info-card");
   const logoImage = document.querySelector("#teamLogoWatermarkImage");
   teamCard.style.setProperty("--team-logo-start", team.logoColors[0]);
@@ -187,7 +188,8 @@ function renderHomeTeam(key) {
   document.querySelector("#profileTeamInitial").textContent = team.initial;
   document.querySelector("#profileRole").textContent = team.role;
   document.querySelector("#profileLeague").textContent = team.league;
-  document.querySelector("#profileTeamStanding").textContent = team.standing;
+  document.querySelector("#profileTeamStanding").textContent = team.region || team.standing;
+  document.querySelector("#openTeamProfile").hidden = !canEditTeam;
   document.querySelector("#profileNumber").textContent = `N.${team.number}`;
   document.querySelector("#profileTeamShort").textContent = team.name;
   document.querySelector("#profilePosition").textContent = team.position;
@@ -346,6 +348,7 @@ function renderTeamPage(key, requestedLeagueId) {
   const team = teams[key];
   const teamRole = signedInAccount?.teamRoles?.[key];
   const canManageRoster = ["host", "admin", "manager"].includes(teamRole);
+  const canEditTeam = ["host", "admin"].includes(teamRole);
   const leagueSelect = document.querySelector("#teamLeagueSelect");
   const leagueId = populateLeagueSelect(leagueSelect, key, requestedLeagueId || leagueSelect.value);
   const league = getLeague(key, leagueId);
@@ -356,6 +359,11 @@ function renderTeamPage(key, requestedLeagueId) {
   document.querySelector("#teamName").textContent = team.name;
   document.querySelector("#teamMeta").textContent = team.teamMeta.split(" · ").slice(0, 2).join(" · ");
   document.querySelector("#teamHostBadge").hidden = teamRole !== "host";
+  document.querySelector("#openTeamProfileFromTeam").hidden = !canEditTeam;
+  document.querySelector("#teamRegion").textContent = team.region || "미설정";
+  document.querySelector("#teamManager").textContent = team.managerName || "미설정";
+  document.querySelector("#teamHomeField").textContent = team.homeField || "미설정";
+  document.querySelector("#teamPrimaryLeagues").textContent = team.primaryLeagues?.length ? team.primaryLeagues.join(" · ") : "미설정";
   document.querySelector("#addPlayerButton").hidden = !canManageRoster;
   document.querySelector("#openTeamScheduleEditor").hidden = !canManageRoster;
   document.querySelector("#teamLeagueLabel").textContent = league.name;
@@ -1083,6 +1091,7 @@ document.addEventListener("keydown", event => {
   if (!playerModal.hidden) closePlayerModal();
   if (!lineupModal.hidden) closeLineupBuilder();
   if (typeof teamAccessModal !== "undefined" && !teamAccessModal.hidden) closeTeamAccess();
+  if (!document.querySelector("#teamProfileGate").hidden) closeTeamProfileEditor();
 });
 
 const didWell = document.querySelector("#didWell");
@@ -1125,11 +1134,14 @@ function placeholderGame() {
 
 function ensureClientTeam(team) {
   const key = team.slug;
+  const primaryLeagues = (team.primaryLeagues || []).filter(Boolean).slice(0, 2);
+  const foundedLabel = team.foundedYear ? `${team.foundedYear}년 창단` : "창단연도 미설정";
   teams[key] = {
     name: team.name, header: `${team.name} · 포지션 미정`, role: "선수", position: "미정", bats: "우투우타", games: "0경기",
-    number: "-", initial: team.name.trim().slice(0, 1) || "B", logo: "", logoColors: ["#0b3539", "#147565"], league: "리그 미설정", standing: "시즌 준비 중",
+    number: "-", initial: team.name.trim().slice(0, 1) || "B", logo: "", logoColors: ["#0b3539", "#147565"], league: primaryLeagues.join(" · ") || "리그 미설정", standing: "시즌 준비 중",
     title: `${team.name}에서의 시즌`, trend: "첫 기록을 기다리고 있어요", summary: "0경기 · 0타석",
-    stats: [["타율", ".000"], ["타점", "0"], ["OPS", ".000"]], teamMeta: "새로 만든 팀 방", wins: "0승 0패", rank: "-"
+    stats: [["타율", ".000"], ["타점", "0"], ["OPS", ".000"]], teamMeta: `${foundedLabel} · 선수 0명`, wins: "0승 0패", rank: "-",
+    region: team.region || "", primaryLeagues, managerName: team.managerName || "", foundedYear: team.foundedYear || "", homeField: team.homeField || "", description: team.description || ""
   };
   teamLeagues[key] = teamLeagues[key] || [{ id: `${key}-league`, name: "리그 미설정", season: "첫 시즌", record: "0승 0패", rank: "-", nextGame: placeholderGame() }];
   rosters[key] = rosters[key] || { staff: [], players: [] };
@@ -1230,6 +1242,7 @@ function syncAccountPlayerAcrossTeams(account) {
     clientTeam.position = position;
     clientTeam.role = roleLabelsWithTeam[team.role] || "선수";
     clientTeam.header = `${clientTeam.name} · ${positionLabels[position] || position}`;
+    clientTeam.teamMeta = `${clientTeam.foundedYear ? `${clientTeam.foundedYear}년 창단` : "창단연도 미설정"} · 선수 ${rosters[team.slug]?.players.length || 0}명`;
     if (ownPlayer?.bats) clientTeam.bats = ownPlayer.bats;
   });
 }
@@ -1360,6 +1373,45 @@ function openProfileSetup(account = signedInAccount) {
   document.querySelector("#setupFullName").focus();
 }
 
+function canEditTeamProfile(teamKey) {
+  return ["host", "admin"].includes(signedInAccount?.teamRoles?.[teamKey]);
+}
+
+function selectedTeamProfileKey(source = "home") {
+  return source === "team" ? document.querySelector("#teamPageSelect").value : document.querySelector("#homeTeamSelect").value;
+}
+
+function openTeamProfileEditor(teamKey = selectedTeamProfileKey()) {
+  if (!teamKey || !canEditTeamProfile(teamKey)) {
+    showToast("팀 정보는 호스트와 관리자만 수정할 수 있습니다.");
+    return;
+  }
+  const team = teams[teamKey];
+  const serverTeam = signedInAccount?.teamDetails?.find(item => item.slug === teamKey);
+  if (!team || !serverTeam?.id) {
+    showToast("팀 정보를 불러오지 못했습니다.");
+    return;
+  }
+  document.querySelector("#teamProfileId").value = serverTeam.id;
+  document.querySelector("#teamProfileCrest").textContent = team.initial;
+  document.querySelector("#teamProfileName").value = team.name;
+  document.querySelector("#teamProfileRegion").value = team.region || "";
+  document.querySelector("#teamProfileLeague1").value = team.primaryLeagues?.[0] || "";
+  document.querySelector("#teamProfileLeague2").value = team.primaryLeagues?.[1] || "";
+  document.querySelector("#teamProfileManager").value = team.managerName || "";
+  document.querySelector("#teamProfileFoundedYear").value = team.foundedYear || new Date().getFullYear();
+  document.querySelector("#teamProfileHomeField").value = team.homeField || "";
+  document.querySelector("#teamProfileDescription").value = team.description || "";
+  document.querySelector("#teamDescriptionCount").textContent = String((team.description || "").length);
+  document.querySelector("#teamProfileMessage").textContent = "";
+  document.querySelector("#teamProfileGate").hidden = false;
+  document.querySelector("#teamProfileName").focus();
+}
+
+function closeTeamProfileEditor() {
+  document.querySelector("#teamProfileGate").hidden = true;
+}
+
 function openTeamAction(id) {
   document.querySelector(id).hidden = false;
   document.body.classList.add("team-setup-required");
@@ -1389,6 +1441,7 @@ async function lockApp() {
   document.querySelector("#teamSetupGate").hidden = true;
   document.querySelector("#teamJoinGate").hidden = true;
   document.querySelector("#profileSetupGate").hidden = true;
+  document.querySelector("#teamProfileGate").hidden = true;
   document.body.classList.remove("team-setup-required");
   authGate.hidden = false;
   document.body.classList.add("auth-locked");
@@ -1484,10 +1537,50 @@ document.querySelector("#teamJoinForm").addEventListener("submit", async event =
   }
 });
 
+document.querySelector("#openTeamProfile").addEventListener("click", () => openTeamProfileEditor(selectedTeamProfileKey("home")));
+document.querySelector("#openTeamProfileFromTeam").addEventListener("click", () => openTeamProfileEditor(selectedTeamProfileKey("team")));
+document.querySelector("#cancelTeamProfile").addEventListener("click", closeTeamProfileEditor);
+document.querySelector("#teamProfileDescription").addEventListener("input", event => {
+  document.querySelector("#teamDescriptionCount").textContent = String(event.target.value.length);
+});
+document.querySelector("#teamProfileForm").addEventListener("submit", async event => {
+  event.preventDefault();
+  const teamId = document.querySelector("#teamProfileId").value;
+  const primaryLeagues = [document.querySelector("#teamProfileLeague1").value, document.querySelector("#teamProfileLeague2").value].map(value => value.trim()).filter(Boolean);
+  const message = document.querySelector("#teamProfileMessage");
+  const button = event.currentTarget.querySelector('[type="submit"]');
+  button.disabled = true;
+  button.textContent = "팀 정보 저장 중";
+  message.textContent = "";
+  try {
+    const { error } = await supabaseClient.rpc("update_team_profile", {
+      p_team_id: teamId,
+      p_name: document.querySelector("#teamProfileName").value.trim(),
+      p_region: document.querySelector("#teamProfileRegion").value.trim(),
+      p_primary_leagues: primaryLeagues,
+      p_manager_name: document.querySelector("#teamProfileManager").value.trim(),
+      p_founded_year: Number(document.querySelector("#teamProfileFoundedYear").value),
+      p_home_field: document.querySelector("#teamProfileHomeField").value.trim(),
+      p_description: document.querySelector("#teamProfileDescription").value.trim(),
+    });
+    if (error) throw error;
+    const { data } = await supabaseClient.auth.getUser();
+    const account = await loadServerAccount(data.user);
+    closeTeamProfileEditor();
+    await unlockApp(account);
+    showToast("팀 정보를 저장했습니다.");
+  } catch (error) {
+    message.textContent = error.message?.includes("NOT_AUTHORIZED") ? "팀 정보는 호스트와 관리자만 수정할 수 있습니다." : "팀 정보를 저장하지 못했습니다. 입력 내용을 확인해주세요.";
+  } finally {
+    button.disabled = false;
+    button.textContent = "팀 정보 저장";
+  }
+});
+
 async function loadServerAccount(user) {
   const [{ data: profile, error: profileError }, { data: memberships, error: membershipError }] = await Promise.all([
     supabaseClient.from("profiles").select("id,username,full_name,nickname,status,is_platform_host,must_change_password,created_at,birth_date,desired_positions,uniform_number,experience_years,is_former_player,profile_complete").eq("id", user.id).single(),
-    supabaseClient.from("team_members").select("role,status,team:teams(id,slug,name,setup_complete)").eq("user_id", user.id),
+    supabaseClient.from("team_members").select("role,status,team:teams(id,slug,name,setup_complete,region,primary_leagues,manager_name,founded_year,home_field,description)").eq("user_id", user.id),
   ]);
   if (profileError || membershipError || !profile) throw profileError || membershipError || new Error("PROFILE_NOT_FOUND");
   const activeMemberships = (memberships || []).filter(item => item.status === "active");
@@ -1500,7 +1593,7 @@ async function loadServerAccount(user) {
     if (!team?.slug) return;
     teamRoles[team.slug] = item.role;
     accountTeamSlugs.push(team.slug);
-    teamDetails.push({ id: team.id, slug: team.slug, name: team.name, setupComplete: team.setup_complete, role: item.role });
+    teamDetails.push({ id: team.id, slug: team.slug, name: team.name, setupComplete: team.setup_complete, role: item.role, region: team.region, primaryLeagues: team.primary_leagues || [], managerName: team.manager_name, foundedYear: team.founded_year, homeField: team.home_field, description: team.description });
   });
   return { id: profile.id, username: profile.username, name: profile.full_name, nickname: profile.nickname, isPlatformHost: profile.is_platform_host, createdAt: profile.created_at, birthDate: profile.birth_date, desiredPositions: profile.desired_positions || [], uniformNumber: profile.uniform_number || "", experienceYears: profile.experience_years || 0, isFormerPlayer: profile.is_former_player, profileComplete: profile.profile_complete, mustChangePassword: profile.must_change_password, teamRoles, teams: accountTeamSlugs, teamDetails };
 }
