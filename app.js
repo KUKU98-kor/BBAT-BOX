@@ -90,6 +90,12 @@ let attendanceState = {};
 let lineupState = {};
 let teamAttendancePolls = {};
 let serverLeagueState = {};
+let cloudGameRecordsByTeam = {};
+let cloudRealtimeChannel = null;
+let cloudFallbackTimer = null;
+let cloudGameSaveTimer = null;
+let cloudLegacyGameRecords = null;
+let cloudLegacyLineupState = null;
 try { attendanceState = JSON.parse(localStorage.getItem("bbat-box-attendance")) || {}; } catch (_) { attendanceState = {}; }
 try { lineupState = JSON.parse(localStorage.getItem("bbat-box-lineups")) || {}; } catch (_) { lineupState = {}; }
 
@@ -403,6 +409,253 @@ async function loadTeamLeagues(teamKey) {
     id: `${teamKey}-league`, name: "리그 미설정", season: "첫 시즌", record: "0승 0패", rank: "-", nextGame: null, games: [],
   }];
 }
+
+function readLocalGameRecords() {
+  try {
+    const records = JSON.parse(localStorage.getItem("bbat-box-game-records-v2") || "[]");
+    return Array.isArray(records) ? records : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+function canRecordCloudTeam(teamKey) {
+  return ["host", "admin", "manager", "scorer"].includes(signedInAccount?.teamRoles?.[teamKey]);
+}
+
+function canManageCloudLineup(teamKey) {
+  return ["host", "admin", "manager"].includes(signedInAccount?.teamRoles?.[teamKey]);
+}
+
+function rebuildCloudGameCache() {
+  const cloudRecords = Object.values(cloudGameRecordsByTeam).flatMap(records => records);
+  localStorage.setItem("bbat-box-game-records-v2", JSON.stringify(cloudRecords));
+  const liveRecord = cloudRecords
+    .filter(record => record.__cloudLiveState?.live)
+    .sort((a, b) => String(b.__cloudUpdatedAt || "").localeCompare(String(a.__cloudUpdatedAt || "")))[0];
+  if (liveRecord) localStorage.setItem("bbat-box-live-game-v1", JSON.stringify(liveRecord.__cloudLiveState));
+  else localStorage.removeItem("bbat-box-live-game-v1");
+  window.dispatchEvent(new CustomEvent("bbat-cloud-records-loaded", { detail: { records: cloudRecords } }));
+  window.dispatchEvent(new CustomEvent("bbat-records-update"));
+  window.dispatchEvent(new CustomEvent("bbat-live-update", { detail: liveRecord?.__cloudLiveState || { live: false } }));
+}
+
+async function loadCloudLineups(teamKey, migrateLocal = true) {
+  const teamId = signedInAccount?.teamIds?.[teamKey];
+  if (!teamId || !supabaseClient) return;
+  let { data, error } = await supabaseClient.rpc("list_team_lineups", { p_team_id: teamId });
+  if (error) throw error;
+  const rows = data || [];
+  if (migrateLocal && canManageCloudLineup(teamKey)) {
+    const serverKeys = new Set(rows.map(row => row.lineup_key));
+    const localEntries = Object.entries(cloudLegacyLineupState || lineupState).filter(([key]) => key.startsWith(`${teamKey}:`) && !serverKeys.has(key));
+    if (localEntries.length) {
+      await Promise.all(localEntries.map(async ([key, payload]) => {
+        const parts = key.split(":");
+        const { error: uploadError } = await supabaseClient.rpc("upsert_team_lineup", {
+          p_team_id: teamId,
+          p_lineup_key: key,
+          p_league_key: parts[1] || "league",
+          p_game_date: parts.at(-1),
+          p_payload: payload,
+        });
+        if (uploadError) throw uploadError;
+      }));
+      ({ data, error } = await supabaseClient.rpc("list_team_lineups", { p_team_id: teamId }));
+      if (error) throw error;
+    }
+  }
+  Object.keys(lineupState).filter(key => key.startsWith(`${teamKey}:`)).forEach(key => delete lineupState[key]);
+  (data || rows).forEach(row => { lineupState[row.lineup_key] = row.payload || {}; });
+  localStorage.setItem("bbat-box-lineups", JSON.stringify(lineupState));
+}
+
+async function loadCloudGameRecords(teamKey, migrateLocal = true) {
+  const teamId = signedInAccount?.teamIds?.[teamKey];
+  if (!teamId || !supabaseClient) return;
+  let { data, error } = await supabaseClient.rpc("list_team_game_records", { p_team_id: teamId });
+  if (error) throw error;
+  const rows = data || [];
+  if (migrateLocal && canRecordCloudTeam(teamKey)) {
+    const serverKeys = new Set(rows.map(row => row.record_key));
+    const localLive = (() => { try { return JSON.parse(localStorage.getItem("bbat-box-live-game-v1") || "null"); } catch (_) { return null; } })();
+    const localRecords = (cloudLegacyGameRecords || readLocalGameRecords()).filter(record => record.teamKey === teamKey && record.id && !serverKeys.has(record.id));
+    if (localRecords.length) {
+      await Promise.all(localRecords.map(async record => {
+        const liveState = localLive?.recordId === record.id ? localLive : {};
+        const { error: uploadError } = await supabaseClient.rpc("upsert_team_game_record", {
+          p_team_id: teamId,
+          p_record_key: record.id,
+          p_league_key: record.leagueId || "league",
+          p_game_date: record.date,
+          p_opponent: record.opponent || "",
+          p_payload: record,
+          p_live_state: liveState,
+          p_finished: Boolean(record.finished),
+          p_is_live: Boolean(record.live && liveState?.live),
+        });
+        if (uploadError) throw uploadError;
+      }));
+      ({ data, error } = await supabaseClient.rpc("list_team_game_records", { p_team_id: teamId }));
+      if (error) throw error;
+    }
+  }
+  cloudGameRecordsByTeam[teamKey] = (data || rows).map(row => ({
+    ...(row.payload || {}),
+    id: row.record_key,
+    teamKey,
+    leagueId: row.league_key,
+    date: row.game_date,
+    finished: Boolean(row.finished),
+    live: Boolean(row.is_live),
+    __cloudLiveState: row.live_state || {},
+    __cloudUpdatedAt: row.updated_at,
+  }));
+  rebuildCloudGameCache();
+}
+
+async function saveCloudLineup(teamKey, leagueKey, game, payload) {
+  const teamId = signedInAccount?.teamIds?.[teamKey];
+  if (!teamId) throw new Error("TEAM_NOT_FOUND");
+  const key = gameKey(teamKey, leagueKey, game);
+  const { error } = await supabaseClient.rpc("upsert_team_lineup", {
+    p_team_id: teamId,
+    p_lineup_key: key,
+    p_league_key: leagueKey,
+    p_game_date: game.date,
+    p_payload: payload,
+  });
+  if (error) throw error;
+}
+
+async function saveCloudGame(record, liveState = {}) {
+  clearTimeout(cloudGameSaveTimer);
+  const teamId = signedInAccount?.teamIds?.[record?.teamKey];
+  if (!teamId || !record?.id) throw new Error("TEAM_NOT_FOUND");
+  const payload = JSON.parse(JSON.stringify(record));
+  delete payload.__cloudLiveState;
+  delete payload.__cloudUpdatedAt;
+  const { error } = await supabaseClient.rpc("upsert_team_game_record", {
+    p_team_id: teamId,
+    p_record_key: record.id,
+    p_league_key: record.leagueId || "league",
+    p_game_date: record.date,
+    p_opponent: record.opponent || "",
+    p_payload: payload,
+    p_live_state: liveState || {},
+    p_finished: Boolean(record.finished),
+    p_is_live: Boolean(record.live && liveState?.live),
+  });
+  if (error) throw error;
+}
+
+function queueCloudGameSave(record, liveState) {
+  clearTimeout(cloudGameSaveTimer);
+  const recordSnapshot = JSON.parse(JSON.stringify(record));
+  const liveSnapshot = JSON.parse(JSON.stringify(liveState || {}));
+  cloudGameSaveTimer = setTimeout(() => {
+    saveCloudGame(recordSnapshot, liveSnapshot).catch(() => showToast("LIVE 서버 동기화를 다시 시도해주세요."));
+  }, 250);
+}
+
+async function deleteCloudGame(teamKey, recordKey) {
+  const teamId = signedInAccount?.teamIds?.[teamKey];
+  if (!teamId) throw new Error("TEAM_NOT_FOUND");
+  const { error } = await supabaseClient.rpc("delete_team_game_record", { p_team_id: teamId, p_record_key: recordKey });
+  if (error) throw error;
+  await loadCloudGameRecords(teamKey, false);
+}
+
+async function loadPrivateNoteFromCloud() {
+  if (!signedInAccount?.id) return;
+  const noteDate = toDateKey(new Date());
+  const { data, error } = await supabaseClient.rpc("get_private_note", { p_note_date: noteDate });
+  if (error) throw error;
+  const localKey = `bbat-box-private-note:${signedInAccount.id}:${noteDate}`;
+  let note = data || {};
+  if (!Object.keys(note).length) {
+    const legacyKey = `bbat-box-private-note:local-user:${noteDate}`;
+    try { note = JSON.parse(localStorage.getItem(localKey) || localStorage.getItem(legacyKey) || "{}"); } catch (_) { note = {}; }
+    if (Object.keys(note).length) await savePrivateNoteToCloud(note);
+  }
+  document.querySelector("#didWell").value = note.didWell || "";
+  document.querySelector("#toLearn").value = note.toLearn || "";
+}
+
+async function savePrivateNoteToCloud(note) {
+  const noteDate = toDateKey(new Date());
+  const localKey = `bbat-box-private-note:${signedInAccount?.id || "local-user"}:${noteDate}`;
+  localStorage.setItem(localKey, JSON.stringify(note));
+  const { error } = await supabaseClient.rpc("upsert_private_note", { p_note_date: noteDate, p_payload: note });
+  if (error) throw error;
+}
+
+async function loadProfilePhotoFromCloud(account) {
+  const accountCacheKey = `bbat-box-profile-photo:${account?.id || "local-user"}`;
+  if (!account?.profilePhotoPath) return localStorage.getItem(accountCacheKey) || localStorage.getItem("bbat-box-profile-photo") || "";
+  const { data, error } = await supabaseClient.storage.from("profile-assets").createSignedUrl(account.profilePhotoPath, 60 * 60);
+  if (error) throw error;
+  return data.signedUrl;
+}
+
+async function saveProfilePhotoToCloud(source) {
+  if (!signedInAccount?.id || !source?.startsWith("data:")) return source;
+  const blob = await fetch(source).then(response => response.blob());
+  const path = `${signedInAccount.id}/profile`;
+  const { error: uploadError } = await supabaseClient.storage.from("profile-assets").upload(path, blob, {
+    upsert: true,
+    contentType: blob.type || "image/jpeg",
+    cacheControl: "3600",
+  });
+  if (uploadError) throw uploadError;
+  const { error: pathError } = await supabaseClient.rpc("update_my_profile_photo", { p_path: path });
+  if (pathError) throw pathError;
+  signedInAccount.profilePhotoPath = path;
+  return loadProfilePhotoFromCloud(signedInAccount);
+}
+
+function stopCloudSync() {
+  if (cloudRealtimeChannel && supabaseClient) supabaseClient.removeChannel(cloudRealtimeChannel);
+  cloudRealtimeChannel = null;
+  clearInterval(cloudFallbackTimer);
+  cloudFallbackTimer = null;
+}
+
+function startCloudSync() {
+  stopCloudSync();
+  if (!signedInAccount || !supabaseClient) return;
+  const refresh = () => Promise.all(accountTeams().map(team => loadCloudGameRecords(team.slug, false))).catch(() => {});
+  cloudRealtimeChannel = supabaseClient.channel(`bbat-games-${signedInAccount.id}`)
+    .on("postgres_changes", { event: "*", schema: "public", table: "team_game_records" }, refresh)
+    .subscribe();
+  cloudFallbackTimer = setInterval(refresh, 15000);
+}
+
+async function loadCloudData() {
+  cloudLegacyGameRecords = readLocalGameRecords();
+  cloudLegacyLineupState = { ...lineupState };
+  try {
+    await Promise.all(accountTeams().map(team => loadCloudLineups(team.slug)));
+    await Promise.all(accountTeams().map(team => loadCloudGameRecords(team.slug)));
+    const allowedTeamPrefixes = accountTeams().map(team => `${team.slug}:`);
+    lineupState = Object.fromEntries(Object.entries(lineupState).filter(([key]) => allowedTeamPrefixes.some(prefix => key.startsWith(prefix))));
+    localStorage.setItem("bbat-box-lineups", JSON.stringify(lineupState));
+    if (!accountTeams().length) rebuildCloudGameCache();
+    await loadPrivateNoteFromCloud();
+    startCloudSync();
+  } finally {
+    cloudLegacyGameRecords = null;
+    cloudLegacyLineupState = null;
+  }
+}
+
+window.BBATCloud = {
+  saveGame: saveCloudGame,
+  queueGameSave: queueCloudGameSave,
+  deleteGame: deleteCloudGame,
+  saveLineup: saveCloudLineup,
+  reloadGames: () => Promise.all(accountTeams().map(team => loadCloudGameRecords(team.slug, false))),
+};
 
 function renderSchedulePolls(teamKey, leagueId) {
   const polls = (teamAttendancePolls[teamKey] || []).filter(poll => poll.leagueKey === leagueId).slice(0, 3);
@@ -861,10 +1114,14 @@ function renderLineupBench(teamKey) {
 
 function renderLineupRows(teamKey, leagueId, game) {
   const attendance = ensureAttendance(teamKey, leagueId, game);
-  const participants = rosters[teamKey].players.filter(player => attendance[player.name] === "yes");
-  const available = rosters[teamKey].players.filter(player => attendance[player.name] !== "yes");
   const stored = lineupState[gameKey(teamKey, leagueId, game)];
   const saved = Array.isArray(stored) ? { batting: stored, pitcher: "" } : stored || { batting: [], pitcher: "" };
+  (saved.participants || []).forEach(number => {
+    const player = rosters[teamKey].players.find(item => item.number === number);
+    if (player) attendance[player.name] = "yes";
+  });
+  const participants = rosters[teamKey].players.filter(player => attendance[player.name] === "yes");
+  const available = rosters[teamKey].players.filter(player => attendance[player.name] !== "yes");
   currentLineupContext.participants = participants;
   document.querySelector("#lineupParticipants").innerHTML = participants.map(player => `<span><b>${player.number}</b>${player.name}<small>${possiblePositions(player).join("/")}</small></span>`).join("");
   document.querySelector("#manualParticipantSelect").innerHTML = available.length ? available.map(player => `<option value="${player.number}">${player.number} ${player.name} · ${possiblePositions(player).join("/")}</option>`).join("") : `<option value="">추가할 선수가 없습니다</option>`;
@@ -1098,22 +1355,36 @@ document.querySelector("#lineupRelieverList").addEventListener("click", event =>
 document.querySelector("#lineupForm").addEventListener("change", event => {
   if (event.target.matches(".lineup-player-select, .reliever-player-select, #lineupPitcherSelect")) renderLineupBench(currentLineupContext.teamKey);
 });
-document.querySelector("#lineupForm").addEventListener("submit", event => {
+document.querySelector("#lineupForm").addEventListener("submit", async event => {
   event.preventDefault();
+  const submit = event.currentTarget.querySelector('[type="submit"]');
+  submit.disabled = true;
+  submit.textContent = "라인업 저장 중";
   const rows = [...document.querySelectorAll(".lineup-row")];
   const batting = rows.map((row, index) => ({ order: index + 1, player: row.querySelector(".lineup-player-select").value, position: row.querySelector(".lineup-position-select").value }));
   const relievers = [...document.querySelectorAll(".reliever-player-select")].map(select => select.value).filter(Boolean);
   const selected = new Set([document.querySelector("#lineupPitcherSelect").value, ...relievers, ...batting.map(item => item.player)].filter(Boolean));
-  lineupState[gameKey(currentLineupContext.teamKey, currentLineupContext.leagueId, currentLineupContext.game)] = {
+  const lineupKey = gameKey(currentLineupContext.teamKey, currentLineupContext.leagueId, currentLineupContext.game);
+  const payload = {
     pitcher: document.querySelector("#lineupPitcherSelect").value,
     relievers,
     batting,
     bench: currentLineupContext.participants.filter(player => !selected.has(player.number)).map(player => player.number),
+    participants: currentLineupContext.participants.map(player => player.number),
   };
+  lineupState[lineupKey] = payload;
   localStorage.setItem("bbat-box-lineups", JSON.stringify(lineupState));
-  renderLineupStatus(currentLineupContext.teamKey, currentLineupContext.leagueId);
-  closeLineupBuilder();
-  showToast("다음 경기 라인업을 저장하고 팀원에게 공개했습니다.");
+  try {
+    await window.BBATCloud.saveLineup(currentLineupContext.teamKey, currentLineupContext.leagueId, currentLineupContext.game, payload);
+    renderLineupStatus(currentLineupContext.teamKey, currentLineupContext.leagueId);
+    closeLineupBuilder();
+    showToast("라인업을 서버에 저장하고 팀원에게 공개했습니다.");
+  } catch (_) {
+    showToast("라인업을 서버에 저장하지 못했습니다. 다시 시도해주세요.");
+  } finally {
+    submit.disabled = false;
+    submit.textContent = "라인업 저장";
+  }
 });
 document.querySelector("#openProfileEditor").addEventListener("click", openProfileEditor);
 document.querySelector("#profileBackButton").addEventListener("click", closeProfileEditor);
@@ -1152,12 +1423,25 @@ document.querySelector("#profileForm").addEventListener("submit", async event =>
   teams[key].position = position;
   teams[key].bats = `${throws}${bats}`;
   teams[key].header = `${teams[key].name} · ${positionLabels[position] || position}`;
-  savedProfilePhoto = draftProfilePhoto;
-  try { localStorage.setItem("bbat-box-profile-photo", savedProfilePhoto); } catch (_) { showToast("사진은 적용됐지만 이 기기에는 저장하지 못했습니다."); }
-  await updateSignedInAccount({ name });
-  renderHomeTeam(key);
-  showScreen("home");
-  showToast("프로필 변경사항을 저장했습니다.");
+  try {
+    const { error: playerError } = await supabaseClient.rpc("update_my_team_player", {
+      p_team_id: signedInAccount?.teamIds?.[key],
+      p_number: number,
+      p_position: position,
+      p_throws: throws,
+      p_bats: bats,
+    });
+    if (playerError) throw playerError;
+    if (draftProfilePhoto !== savedProfilePhoto) savedProfilePhoto = await saveProfilePhotoToCloud(draftProfilePhoto);
+    localStorage.setItem(`bbat-box-profile-photo:${signedInAccount.id}`, savedProfilePhoto);
+    applyProfilePhoto(savedProfilePhoto);
+    await updateSignedInAccount({ name });
+    renderHomeTeam(key);
+    showScreen("home");
+    showToast("프로필과 사진을 서버에 저장했습니다.");
+  } catch (_) {
+    showToast("프로필을 서버에 저장하지 못했습니다. 다시 시도해주세요.");
+  }
 });
 
 document.querySelector("#leagueAccordion").addEventListener("click", event => {
@@ -1350,15 +1634,18 @@ document.addEventListener("keydown", event => {
 
 const didWell = document.querySelector("#didWell");
 const toLearn = document.querySelector("#toLearn");
-const privateNoteKey = `bbat-box-private-note:local-user:${toDateKey(new Date())}`;
-document.querySelector("#saveNoteButton").addEventListener("click", () => {
-  localStorage.setItem(privateNoteKey, JSON.stringify({ didWell: didWell.value, toLearn: toLearn.value, visibility: "private" }));
-  showToast("오늘의 개인 노트를 나만 볼 수 있게 저장했습니다.");
+document.querySelector("#saveNoteButton").addEventListener("click", async event => {
+  const button = event.currentTarget;
+  button.disabled = true;
+  try {
+    await savePrivateNoteToCloud({ didWell: didWell.value, toLearn: toLearn.value, visibility: "private" });
+    showToast("오늘의 개인 노트를 서버에 나만 볼 수 있게 저장했습니다.");
+  } catch (_) {
+    showToast("개인 노트를 서버에 저장하지 못했습니다.");
+  } finally {
+    button.disabled = false;
+  }
 });
-try {
-  const saved = JSON.parse(localStorage.getItem(privateNoteKey));
-  if (saved) { didWell.value = saved.didWell || ""; toLearn.value = saved.toLearn || ""; }
-} catch (_) { /* 손상된 임시 저장값은 무시합니다. */ }
 
 buildCalendar();
 renderCalendarDay(selectedCalendarDate);
@@ -1586,6 +1873,8 @@ function setAuthMode(mode) {
 async function applySignedInUser(account) {
   if (!account) return;
   const previousName = signedInAccount?.name || "이도윤";
+  stopCloudSync();
+  cloudGameRecordsByTeam = {};
   signedInAccount = account;
   migratePlayerIdentity(previousName, account.name);
   syncAccountTeamSelectors(account);
@@ -1593,6 +1882,23 @@ async function applySignedInUser(account) {
   syncAccountPlayerAcrossTeams(account);
   await Promise.all(accountTeams(account).map(team => loadTeamLeagues(team.slug)));
   await Promise.all(accountTeams(account).map(team => loadTeamAttendancePolls(team.slug)));
+  try {
+    savedProfilePhoto = await loadProfilePhotoFromCloud(account);
+    if (!account.profilePhotoPath && savedProfilePhoto.startsWith("data:")) savedProfilePhoto = await saveProfilePhotoToCloud(savedProfilePhoto);
+    draftProfilePhoto = savedProfilePhoto;
+    localStorage.setItem(`bbat-box-profile-photo:${account.id}`, savedProfilePhoto);
+    applyProfilePhoto(savedProfilePhoto);
+  } catch (_) {
+    savedProfilePhoto = localStorage.getItem(`bbat-box-profile-photo:${account.id}`) || "";
+    draftProfilePhoto = savedProfilePhoto;
+    applyProfilePhoto(savedProfilePhoto);
+  }
+  try {
+    await loadCloudData();
+  } catch (_) {
+    showToast("일부 서버 기록을 불러오지 못했습니다. 잠시 후 다시 시도합니다.");
+    startCloudSync();
+  }
   const firstTeam = accountTeams(account)[0];
   const role = firstTeam?.role || (account.isPlatformHost ? "host" : "member");
   const roleLabelsWithTeam = { host: "호스트", admin: "관리자", manager: "매니저", scorer: "기록원", member: "선수" };
@@ -1743,8 +2049,14 @@ async function unlockApp(account) {
 }
 
 async function lockApp() {
+  stopCloudSync();
   if (supabaseClient) await supabaseClient.auth.signOut();
   signedInAccount = null;
+  savedProfilePhoto = "";
+  draftProfilePhoto = "";
+  applyProfilePhoto("");
+  didWell.value = "";
+  toLearn.value = "";
   document.querySelector("#teamSetupGate").hidden = true;
   document.querySelector("#teamJoinGate").hidden = true;
   document.querySelector("#profileSetupGate").hidden = true;
@@ -1927,7 +2239,7 @@ document.querySelector("#teamProfileForm").addEventListener("submit", async even
 
 async function loadServerAccount(user) {
   const [{ data: profile, error: profileError }, { data: memberships, error: membershipError }] = await Promise.all([
-    supabaseClient.from("profiles").select("id,username,full_name,nickname,status,is_platform_host,must_change_password,created_at,birth_date,desired_positions,uniform_number,experience_years,is_former_player,profile_complete").eq("id", user.id).single(),
+    supabaseClient.from("profiles").select("id,username,full_name,nickname,status,is_platform_host,must_change_password,created_at,birth_date,desired_positions,uniform_number,experience_years,is_former_player,profile_complete,profile_photo_path").eq("id", user.id).single(),
     supabaseClient.from("team_members").select("role,status,team:teams(id,slug,name,setup_complete,region,primary_leagues,manager_name,founded_year,home_field,description,team_image_path,updated_at)").eq("user_id", user.id),
   ]);
   if (profileError || membershipError || !profile) throw profileError || membershipError || new Error("PROFILE_NOT_FOUND");
@@ -1943,7 +2255,7 @@ async function loadServerAccount(user) {
     accountTeamSlugs.push(team.slug);
     teamDetails.push({ id: team.id, slug: team.slug, name: team.name, setupComplete: team.setup_complete, role: item.role, region: team.region, primaryLeagues: team.primary_leagues || [], managerName: team.manager_name, foundedYear: team.founded_year, homeField: team.home_field, description: team.description, teamImagePath: team.team_image_path, updatedAt: team.updated_at });
   });
-  return { id: profile.id, username: profile.username, name: profile.full_name, nickname: profile.nickname, isPlatformHost: profile.is_platform_host, createdAt: profile.created_at, birthDate: profile.birth_date, desiredPositions: profile.desired_positions || [], uniformNumber: profile.uniform_number || "", experienceYears: profile.experience_years || 0, isFormerPlayer: profile.is_former_player, profileComplete: profile.profile_complete, mustChangePassword: profile.must_change_password, teamRoles, teams: accountTeamSlugs, teamDetails };
+  return { id: profile.id, username: profile.username, name: profile.full_name, nickname: profile.nickname, isPlatformHost: profile.is_platform_host, createdAt: profile.created_at, birthDate: profile.birth_date, desiredPositions: profile.desired_positions || [], uniformNumber: profile.uniform_number || "", experienceYears: profile.experience_years || 0, isFormerPlayer: profile.is_former_player, profileComplete: profile.profile_complete, profilePhotoPath: profile.profile_photo_path || "", mustChangePassword: profile.must_change_password, teamRoles, teams: accountTeamSlugs, teamDetails };
 }
 
 async function restoreServerSession() {
