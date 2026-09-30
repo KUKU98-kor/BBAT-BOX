@@ -10,6 +10,7 @@ const [app, html, migration] = await Promise.all([
 
 test("team page join button opens the code form", () => {
   assert.match(app, /#joinTeamButton[\s\S]*openTeamAction\("#teamJoinGate"\)/);
+  assert.doesNotMatch(app, /참가 코드 입력 화면은 다음 단계/);
   assert.match(html, /id="teamJoinCode"/);
 });
 

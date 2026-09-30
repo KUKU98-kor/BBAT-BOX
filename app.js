@@ -1542,7 +1542,6 @@ document.querySelector("#leagueCreateForm").addEventListener("submit", async eve
     submit.textContent = "리그 만들기";
   }
 });
-document.querySelector("#joinTeamButton").addEventListener("click", () => showToast("참가 코드 입력 화면은 다음 단계에서 연결합니다."));
 document.querySelector("#openScheduleEditor").addEventListener("click", openScheduleEditor);
 document.querySelector("#closeScheduleEditor").addEventListener("click", closeScheduleEditor);
 document.querySelector("#cancelScheduleEdit").addEventListener("click", closeScheduleEditor);
