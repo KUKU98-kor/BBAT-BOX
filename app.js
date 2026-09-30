@@ -128,6 +128,12 @@ function applyProfilePhoto(source) {
     image.src = source || "";
     frame.classList.toggle("has-image", Boolean(source));
   });
+  document.querySelectorAll(".mini-avatar").forEach(frame => {
+    const image = frame.querySelector(".mini-avatar-image");
+    if (!image) return;
+    image.src = source || "";
+    frame.classList.toggle("has-image", Boolean(source));
+  });
 }
 
 function resizeProfilePhoto(file) {
