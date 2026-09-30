@@ -44,6 +44,6 @@ test("scorebook sends saves, live changes, and deletes through cloud adapter", (
 });
 
 test("deployment cache versions include cloud sync bundle", () => {
-  assert.match(html, /app\.js\?v=22/);
+  assert.match(html, /app\.js\?v=23/);
   assert.match(html, /scorebook\.js\?v=12/);
 });

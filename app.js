@@ -2096,6 +2096,7 @@ document.querySelector("#teamSetupForm").addEventListener("submit", async event 
 document.querySelector("#openTeamCreate").addEventListener("click", () => openTeamAction("#teamSetupGate"));
 document.querySelector("#teamSetupClose").addEventListener("click", () => closeTeamAction("#teamSetupGate"));
 document.querySelector("#openTeamJoin").addEventListener("click", () => openTeamAction("#teamJoinGate"));
+document.querySelector("#joinTeamButton").addEventListener("click", () => openTeamAction("#teamJoinGate"));
 document.querySelector("#teamJoinClose").addEventListener("click", () => closeTeamAction("#teamJoinGate"));
 
 document.querySelector("#profileSetupForm").addEventListener("submit", async event => {
@@ -2141,18 +2142,21 @@ document.querySelector("#teamJoinForm").addEventListener("submit", async event =
   button.disabled = true;
   button.textContent = "팀 연결 중";
   try {
-    const { error } = await supabaseClient.rpc("join_team_by_code", { p_code: document.querySelector("#teamJoinCode").value.trim() });
+    const { data, error } = await supabaseClient.rpc("join_team_by_code", { p_code: document.querySelector("#teamJoinCode").value.trim() });
     if (error) throw error;
-    const { data } = await supabaseClient.auth.getUser();
-    const account = await loadServerAccount(data.user);
+    const request = data?.[0];
     event.currentTarget.reset();
-    await unlockApp(account);
-    showToast("팀에 참여했습니다.");
+    closeTeamAction("#teamJoinGate");
+    showToast(`${request?.name || "팀"} 가입 신청을 보냈습니다. 호스트 또는 관리자 승인 후 연결됩니다.`);
   } catch (error) {
-    message.textContent = error.message?.includes("ALREADY_MEMBER") ? "이미 참여 중인 팀입니다." : "참여코드가 올바르지 않거나 만료되었습니다.";
+    message.textContent = error.message?.includes("ALREADY_MEMBER")
+      ? "이미 참여 중인 팀입니다."
+      : error.message?.includes("ALREADY_REQUESTED")
+        ? "이미 가입 신청을 보냈습니다. 팀 관리자의 승인을 기다려주세요."
+        : "참가코드가 올바르지 않거나 만료되었습니다.";
   } finally {
     button.disabled = false;
-    button.textContent = "팀 참여하기";
+    button.textContent = "참가 신청하기";
   }
 });
 
@@ -2435,6 +2439,30 @@ async function renderTeamMembers() {
   }).join("");
 }
 
+async function renderTeamJoinRequests() {
+  const section = document.querySelector("#joinRequestSection");
+  const list = document.querySelector("#teamJoinRequestList");
+  const teamId = managedTeamId();
+  const myRole = signedInAccount?.teamRoles?.[managedTeamKey()];
+  if (!teamId || !["host", "admin"].includes(myRole)) {
+    section.hidden = true;
+    return;
+  }
+  section.hidden = false;
+  list.innerHTML = '<p class="poll-empty">가입 신청을 불러오는 중입니다.</p>';
+  const { data, error } = await supabaseClient.rpc("list_team_join_requests", { p_team_id: teamId });
+  if (error) {
+    list.innerHTML = '<p class="poll-empty">가입 신청을 불러오지 못했습니다.</p>';
+    return;
+  }
+  list.innerHTML = data?.length ? data.map(request => `
+    <article class="join-request-row" data-request-id="${request.request_id}">
+      <div><strong>${escapeMarkup(request.nickname)} (${escapeMarkup(request.full_name)})</strong><small>${escapeMarkup(request.username)} · 요청 권한 ${roleLabels[request.requested_role] || "선수"} · ${new Date(request.requested_at).toLocaleDateString("ko-KR")}</small></div>
+      <button class="approve" type="button" data-join-decision="approve">승인</button>
+      <button class="reject" type="button" data-join-decision="reject">거절</button>
+    </article>`).join("") : '<p class="poll-empty">대기 중인 가입 신청이 없습니다.</p>';
+}
+
 async function openTeamAccess() {
   closeSettings();
   teamAccessModal.hidden = false;
@@ -2443,7 +2471,7 @@ async function openTeamAccess() {
   document.querySelector("#inviteResult").hidden = true;
   const team = teams[managedTeamKey()];
   teamAccessModal.querySelector("header p").textContent = `${team?.name || "팀"} HOST`;
-  await renderTeamMembers();
+  await Promise.all([renderTeamMembers(), renderTeamJoinRequests()]);
 }
 
 document.querySelector("#teamAccessButton").addEventListener("click", openTeamAccess);
@@ -2451,6 +2479,7 @@ document.querySelector("#openTeamAccessFromTeam").addEventListener("click", open
 document.querySelector("#closeTeamAccess").addEventListener("click", closeTeamAccess);
 teamAccessBackdrop.addEventListener("click", closeTeamAccess);
 document.querySelector("#refreshMembers").addEventListener("click", renderTeamMembers);
+document.querySelector("#refreshJoinRequests").addEventListener("click", renderTeamJoinRequests);
 document.querySelector("#createInviteButton").addEventListener("click", async event => {
   const button = event.currentTarget;
   button.disabled = true;
@@ -2466,6 +2495,7 @@ document.querySelector("#createInviteButton").addEventListener("click", async ev
     document.querySelector("#inviteCodeValue").textContent = invite.code;
     document.querySelector("#inviteExpiry").textContent = `${new Date(invite.expires_at).toLocaleDateString("ko-KR")}까지 · ${invite.max_uses}회 사용`;
     document.querySelector("#inviteResult").hidden = false;
+    showToast("팀 참가코드를 만들었습니다. 팀원에게 전달해주세요.");
   } catch (error) {
     showToast(error?.message?.includes("MAX_EDITORS_REACHED")
       ? "수정 권한은 팀 방마다 최대 5명까지 지정할 수 있습니다."
@@ -2476,6 +2506,38 @@ document.querySelector("#createInviteButton").addEventListener("click", async ev
 document.querySelector("#copyInviteCode").addEventListener("click", async () => {
   await navigator.clipboard.writeText(document.querySelector("#inviteCodeValue").textContent);
   showToast("초대 코드를 복사했습니다.");
+});
+document.querySelector("#teamJoinRequestList").addEventListener("click", async event => {
+  const button = event.target.closest("[data-join-decision]");
+  if (!button) return;
+  const row = button.closest("[data-request-id]");
+  const decision = button.dataset.joinDecision;
+  row.querySelectorAll("button").forEach(item => { item.disabled = true; });
+  try {
+    const { error } = await supabaseClient.rpc("review_team_join_request", {
+      p_team_id: managedTeamId(),
+      p_request_id: row.dataset.requestId,
+      p_decision: decision,
+    });
+    if (error) throw error;
+    showToast(decision === "approve" ? "가입 신청을 승인했습니다." : "가입 신청을 거절했습니다.");
+    await Promise.all([renderTeamJoinRequests(), renderTeamMembers(), renderTeamMemberRolePanel()]);
+    if (decision === "approve") {
+      await loadAccountTeamPlayers(signedInAccount);
+      const teamKey = managedTeamKey();
+      renderTeamPage(teamKey, document.querySelector("#teamLeagueSelect")?.value);
+    }
+  } catch (error) {
+    const message = error.message?.includes("MAX_EDITORS_REACHED")
+      ? "수정 권한은 팀 방마다 최대 5명까지 지정할 수 있습니다."
+      : error.message?.includes("INVITE_EXPIRED")
+        ? "이 신청에 사용된 참가코드가 만료되었습니다. 새 코드를 발급해주세요."
+        : error.message?.includes("HOST_REQUIRED")
+          ? "관리자 가입 승인은 호스트만 처리할 수 있습니다."
+          : "가입 신청을 처리하지 못했습니다.";
+    showToast(message);
+    await renderTeamJoinRequests();
+  }
 });
 document.querySelector("#memberAdminList").addEventListener("change", async event => {
   const select = event.target.closest("[data-member-role]");
