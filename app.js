@@ -182,6 +182,18 @@ function showToast(message) {
   showToast.timer = setTimeout(() => toast.classList.remove("show"), 2200);
 }
 
+function renderHomeLeagueList(teamKey) {
+  const miniList = document.querySelector(".league-mini-list");
+  if (!miniList) return;
+  const team = teams[teamKey];
+  const leagues = serverLeagueState[teamKey] || [];
+  if (!team || !leagues.length) {
+    miniList.innerHTML = `<div class="empty-league-home"><strong>참여 중인 리그가 없습니다.</strong><span>${team ? `${escapeMarkup(team.name)}의 첫 리그를 만들면 여기에 표시됩니다.` : "팀에 참여하면 리그가 이곳에 표시됩니다."}</span></div>`;
+    return;
+  }
+  miniList.innerHTML = leagues.map(league => `<button type="button" data-go="league" aria-label="${escapeMarkup(league.name)} 리그 기록 보기"><span class="league-emblem seoul">${escapeMarkup(league.name.slice(0, 1))}</span><span><strong>${escapeMarkup(league.name)}</strong><small>${escapeMarkup(team.name)} · ${escapeMarkup(league.season)}</small></span><b>참여 중</b></button>`).join("");
+}
+
 function renderHomeTeam(key) {
   const team = teams[key];
   const canEditTeam = ["host", "admin"].includes(signedInAccount?.teamRoles?.[key]);
@@ -216,6 +228,7 @@ function renderHomeTeam(key) {
   document.querySelector("#seasonTrend").textContent = team.trend;
   document.querySelector("#recordSummary").textContent = team.summary;
   document.querySelector("#homeStats").innerHTML = team.stats.map(([label, value], index) => `<div class="${index === 0 ? "key" : ""}"><small>${label}</small><strong>${value}</strong></div>`).join("");
+  renderHomeLeagueList(key);
 }
 
 function openProfileEditor() {
@@ -1511,6 +1524,7 @@ function renderLeagueDashboard() {
   note.querySelector("p").textContent = canCreate ? "새 리그를 만든 뒤 경기 기록과 참가투표를 연결하세요." : "리그 생성과 권한 지정은 팀 호스트 또는 관리자가 담당합니다.";
   const rows = accountTeams().flatMap(team => (serverLeagueState[team.slug] || []).map(league => ({ team, league })));
   const accordion = document.querySelector("#leagueAccordion");
+  renderHomeLeagueList(selectedAccountTeamKey());
   if (!rows.length) {
     accordion.innerHTML = `<div class="live-empty"><strong>아직 등록한 리그가 없습니다.</strong><p>${canCreate ? "리그 만들기를 눌러 첫 리그 기록 공간을 만드세요." : "팀 호스트가 리그를 만들면 이곳에 표시됩니다."}</p></div>`;
     return;
