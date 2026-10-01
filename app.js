@@ -2454,10 +2454,13 @@ async function renderTeamJoinRequests() {
     list.innerHTML = '<p class="poll-empty">가입 신청을 불러오지 못했습니다.</p>';
     return;
   }
+  const roleOptions = ["member", "scorer", "manager", "admin"]
+    .map(role => `<option value="${role}">${roleLabels[role]}</option>`).join("");
   list.innerHTML = data?.length ? data.map(request => `
     <article class="join-request-row" data-request-id="${request.request_id}">
-      <div><strong>${escapeMarkup(request.nickname)} (${escapeMarkup(request.full_name)})</strong><small>${escapeMarkup(request.username)} · 요청 권한 ${roleLabels[request.requested_role] || "선수"} · ${new Date(request.requested_at).toLocaleDateString("ko-KR")}</small></div>
-      <button class="approve" type="button" data-join-decision="approve">승인</button>
+      <div><strong>${escapeMarkup(request.nickname)} (${escapeMarkup(request.full_name)})</strong><small>${escapeMarkup(request.username)} · ${new Date(request.requested_at).toLocaleDateString("ko-KR")} 신청</small></div>
+      <label class="join-role-select">승인 권한<select data-join-role aria-label="${escapeMarkup(request.full_name)} 승인 권한">${roleOptions}</select></label>
+      <button class="approve" type="button" data-join-decision="approve">선택 권한으로 승인</button>
       <button class="reject" type="button" data-join-decision="reject">거절</button>
     </article>`).join("") : '<p class="poll-empty">대기 중인 가입 신청이 없습니다.</p>';
 }
@@ -2485,7 +2488,7 @@ document.querySelector("#createInviteButton").addEventListener("click", async ev
   try {
     const { data, error } = await supabaseClient.rpc("create_team_invite", {
       p_team_id: managedTeamId(),
-      p_role: document.querySelector("#inviteRole").value,
+      p_role: "member",
       p_expires_days: 30,
       p_max_uses: Number(document.querySelector("#inviteUses").value) || 1,
     });
@@ -2511,12 +2514,15 @@ document.querySelector("#teamJoinRequestList").addEventListener("click", async e
   if (!button) return;
   const row = button.closest("[data-request-id]");
   const decision = button.dataset.joinDecision;
+  const selectedRole = row.querySelector("[data-join-role]")?.value || "member";
   row.querySelectorAll("button").forEach(item => { item.disabled = true; });
+  row.querySelectorAll("select").forEach(item => { item.disabled = true; });
   try {
     const { error } = await supabaseClient.rpc("review_team_join_request", {
       p_team_id: managedTeamId(),
       p_request_id: row.dataset.requestId,
       p_decision: decision,
+      p_role: selectedRole,
     });
     if (error) throw error;
     showToast(decision === "approve" ? "가입 신청을 승인했습니다." : "가입 신청을 거절했습니다.");
@@ -2532,7 +2538,7 @@ document.querySelector("#teamJoinRequestList").addEventListener("click", async e
       : error.message?.includes("INVITE_EXPIRED")
         ? "이 신청에 사용된 참가코드가 만료되었습니다. 새 코드를 발급해주세요."
         : error.message?.includes("HOST_REQUIRED")
-          ? "관리자 가입 승인은 호스트만 처리할 수 있습니다."
+          ? "관리자 권한 승인은 호스트만 처리할 수 있습니다."
           : "가입 신청을 처리하지 못했습니다.";
     showToast(message);
     await renderTeamJoinRequests();

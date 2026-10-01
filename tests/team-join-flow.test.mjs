@@ -2,10 +2,11 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-const [app, html, migration] = await Promise.all([
+const [app, html, migration, roleMigration] = await Promise.all([
   readFile(new URL("../app.js", import.meta.url), "utf8"),
   readFile(new URL("../index.html", import.meta.url), "utf8"),
   readFile(new URL("../supabase/migrations/202609300011_team_join_approval.sql", import.meta.url), "utf8"),
+  readFile(new URL("../supabase/migrations/202610010001_team_join_role_on_approval.sql", import.meta.url), "utf8"),
 ]);
 
 test("team page join button opens the code form", () => {
@@ -30,4 +31,14 @@ test("approval adds both membership and linked player", () => {
   assert.match(migration, /insert into public\.team_members/);
   assert.match(migration, /insert into public\.team_players/);
   assert.match(migration, /team_join_approved/);
+});
+
+test("team code is role-neutral and approval chooses the role", () => {
+  assert.doesNotMatch(html, /id="inviteRole"/);
+  assert.match(app, /p_role:\s*"member"/);
+  assert.match(app, /data-join-role/);
+  assert.match(app, /p_role:\s*selectedRole/);
+  assert.match(roleMigration, /p_role text/);
+  assert.match(roleMigration, /values \(p_team_id, v_request\.user_id, p_role\)/);
+  assert.match(roleMigration, /requested_role = p_role/);
 });
