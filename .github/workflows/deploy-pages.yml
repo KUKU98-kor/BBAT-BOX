@@ -1,9 +1,9 @@
-name: Deploy beta to GitHub Pages
+name: Deploy production to GitHub Pages
 
 on:
   push:
     branches:
-      - beta
+      - main
   workflow_dispatch:
 
 permissions:
@@ -22,7 +22,7 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout beta
+      - name: Checkout production
         uses: actions/checkout@v6
 
       - name: Configure GitHub Pages

@@ -1,0 +1,20 @@
+{
+  "name": "BBAT BOX",
+  "short_name": "BBAT BOX",
+  "description": "팀 일정, 라인업, 경기 기록과 LIVE를 함께 관리하는 야구팀 앱",
+  "lang": "ko-KR",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#eef4f2",
+  "theme_color": "#0b262c",
+  "icons": [
+    {
+      "src": "assets/bbat-box-logo.png",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

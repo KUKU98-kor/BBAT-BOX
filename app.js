@@ -2584,3 +2584,11 @@ document.querySelector("#memberAdminList").addEventListener("click", async event
 
 document.querySelector("#setupBirthDate").max = toDateKey(new Date());
 restoreServerSession();
+
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./sw.js?v=1.0.0").catch(() => {
+      // 서비스 워커를 지원하지 않거나 차단한 브라우저에서도 웹 기능은 그대로 동작합니다.
+    });
+  });
+}
